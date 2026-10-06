@@ -104,9 +104,11 @@ final class Storage
         $challenge = bin2hex(random_bytes(24));
         $positive = $root . '/wplite-probe-' . $id . '.txt';
         $created = $directories = [];
+        $controlCreated = false;
         $encode = static fn (string $path): string => implode('/', array_map('rawurlencode', explode('/', $path)));
         try {
             self::freshFile($positive, $challenge);
+            $controlCreated = true;
             [$status, $body] = self::get($origin . $encode(substr($positive, strlen($public))) . '?wplite=' . $id);
             if ($status !== 200 || $body !== $challenge) {
                 throw new \RuntimeException('Full snapshot public control probe failed; no real snapshot was written.');
@@ -136,7 +138,10 @@ final class Storage
         } finally {
             foreach ($created as $file) { unlink($file); }
             foreach (array_reverse($directories) as $directory) { rmdir($directory); }
-            if (is_file($positive)) { unlink($positive); }
+            if ($controlCreated && is_file($positive)) { unlink($positive); }
+        }
+        if (file_exists($positive) || is_link($positive) || array_diff(scandir($target), ['.', '..'])) {
+            throw new \RuntimeException('Full snapshot probes were not completely cleaned; no real snapshot was written.');
         }
     }
 

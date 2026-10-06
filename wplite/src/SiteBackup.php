@@ -142,11 +142,6 @@ final class SiteBackup
         try {
             [$root, $data, $state] = self::site($root, $data);
             Restore::assertRuntime($root);
-            if (!isset($state['backup_key'])) {
-                $state['backup_key'] = bin2hex(random_bytes(32));
-                Environment::writeState($data, $state);
-            }
-            $key = Backup::backupKey($state);
             if ($output === null) {
                 $parent = $data . '/backups';
                 if (is_link($parent) || (file_exists($parent) && !is_dir($parent))) {
@@ -167,6 +162,11 @@ final class SiteBackup
             if (Environment::isWithin($target, $state['public_root'])) {
                 Storage::probeSiteBackup($root, $state['public_root'], $target, $publicOrigin ?? '');
             }
+            if (!isset($state['backup_key'])) {
+                $state['backup_key'] = bin2hex(random_bytes(32));
+                Environment::writeState($data, $state);
+            }
+            $key = Backup::backupKey($state);
             $lease->record('inventory');
             $original = self::inventory($root, $data);
             foreach (['', '-wal', '-shm'] as $suffix) {
