@@ -106,10 +106,9 @@ final class Diagnostics
         }
         $free = @disk_free_space($data);
         $report['storage']['free_bytes'] = $free === false ? null : (int) $free;
+        $report['storage']['database_backup_headroom'] = 'unknown';
         if ($free === false) {
             $report['warnings'][] = 'free_space_unknown';
-        } elseif ($free < 16 * 1024 * 1024 + (is_file($state['database']) ? filesize($state['database']) * 2 : 0)) {
-            $report['warnings'][] = 'low_database_backup_headroom';
         }
         try {
             $report['maintenance'] = @Maintenance::status($data)['phase'] === 'inactive' ? 'inactive' : 'active';
@@ -129,6 +128,13 @@ final class Diagnostics
             $report['errors'][] = 'database_missing_or_invalid';
             return $report;
         }
+        foreach (['-wal', '-shm'] as $suffix) {
+            if (is_link($file . $suffix) || (file_exists($file . $suffix) && !is_file($file . $suffix))) {
+                $report['database']['status'] = 'missing_or_invalid';
+                $report['errors'][] = 'database_missing_or_invalid';
+                return $report;
+            }
+        }
         try {
             $uri = 'file:' . str_replace('%2F', '/', rawurlencode($file)) . '?mode=ro';
             $pdo = new \PDO('sqlite:' . $uri, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
@@ -139,6 +145,16 @@ final class Diagnostics
             }
             $report['database']['status'] = 'available';
             $report['database']['bytes'] = filesize($file);
+            $logical = (int) $pdo->query('PRAGMA page_count')->fetchColumn()
+                * (int) $pdo->query('PRAGMA page_size')->fetchColumn();
+            $report['database']['logical_bytes'] = $logical;
+            if ($free !== false) {
+                $sufficient = $free >= 2 * $logical + 16 * 1024 * 1024;
+                $report['storage']['database_backup_headroom'] = $sufficient ? 'estimated_sufficient' : 'insufficient';
+                if (!$sufficient) {
+                    $report['warnings'][] = 'low_database_backup_headroom';
+                }
+            }
             $report['database']['journal_mode'] = strtolower((string) $pdo->query('PRAGMA journal_mode')->fetchColumn());
             if ($report['database']['journal_mode'] !== 'wal') {
                 $report['errors'][] = 'database_not_wal';
