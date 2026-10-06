@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 $wpliteConfig = __DIR__ . '/site-config.php';
 if (is_file($wpliteConfig) && !is_link($wpliteConfig)) {
+    define('WPLITE_CONFIG_LOADING', true);
     require $wpliteConfig;
     return;
 }

@@ -62,6 +62,7 @@ final class Installer
                 $constants[$salt] = bin2hex(random_bytes(48));
             }
             $config = "<?php\n// Generated private site configuration; never distribute this file.\n";
+            $config .= "if (!defined('WPLITE_CONFIG_LOADING')) { http_response_code(404); exit; }\n";
             foreach ($constants as $key => $value) {
                 $config .= 'define(' . var_export($key, true) . ', ' . var_export($value, true) . ");\n";
             }
