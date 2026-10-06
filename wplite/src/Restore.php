@@ -5,6 +5,7 @@ namespace WPLite;
 
 require_once __DIR__ . '/Backup.php';
 require_once __DIR__ . '/Maintenance.php';
+require_once __DIR__ . '/Storage.php';
 
 /** Database recovery that works without loading WordPress or its database. */
 final class Restore
@@ -14,10 +15,11 @@ final class Restore
         Environment::requireSupported();
         $root = realpath($root);
         $data = realpath($data);
-        if ($root === false || $data === false || Environment::isWithin($data, $root)) {
+        if ($root === false || $data === false) {
             throw new \RuntimeException('The installed site and private data directory are required.');
         }
         $state = Environment::readState($data);
+        Storage::assertInstalled($data, $state);
         if (($state['root'] ?? '') !== $root || ($state['status'] ?? '') !== 'installed'
             || dirname($state['database'] ?? '') !== $data
             || !preg_match('/^[a-f0-9]{48}$/D', $state['site_id'] ?? '')
@@ -43,6 +45,9 @@ final class Restore
             if (!is_file($root . '/' . $relative)) {
                 throw new \RuntimeException('Required WordPress configuration/core files are missing.');
             }
+        }
+        if (isset($manifest['files']['wp-config.php']) && !is_file($root . '/wplite/site-config.php')) {
+            throw new \RuntimeException('The private site configuration is missing.');
         }
         $source = file_get_contents($root . '/wp-includes/version.php');
         if (!preg_match('/\$wp_version\s*=\s*[\x27\x22]([^\x27\x22]+)[\x27\x22]/', $source, $match)
