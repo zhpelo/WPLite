@@ -62,7 +62,9 @@ final class SiteBackup
 
     private static function inventory(string $root, ?string $exclude = null, bool $private = false): array
     {
-        self::stat($root, $private);
+        if ((self::stat($root, $private)['mode'] & 0170000) !== 0040000) {
+            throw new \RuntimeException('Full backup file tree must be a real directory.');
+        }
         $files = $directories = [];
         $walk = static function (string $relative) use (&$walk, &$files, &$directories, $root, $exclude, $private): void {
             $parent = $root . ($relative === '' ? '' : '/' . $relative);

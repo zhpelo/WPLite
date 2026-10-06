@@ -31,7 +31,7 @@
     "wplite/src/Installer.php": "5ecdda77aaf70f1fcfa1146c3ec40393b06feaff1a1acadd5c3e4b4db007f4c8",
     "wplite/src/Maintenance.php": "7118418442b169adca890185e5a492bce94104bc3be90008a7923daa7bb8b64f",
     "wplite/src/Restore.php": "447cf20e1c1223be293afb54769a6efdbd787d042be9f06bd0f8daa027f76321",
-    "wplite/src/SiteBackup.php": "ebf8f9dca73a51bd0e77d3cc9dc6b6b7949550eeac4e94931ce55b80732375a9",
+    "wplite/src/SiteBackup.php": "e4df4c06ef3d8f0d90446902dfb2be06d3530ba33eb7c7b582cdccba0c0f8594",
     "wplite/src/Storage.php": "a78046fa391359056d615e46b883e8f4ac43677d0813ba96760b765a7abf09ba",
     "wplite/src/WebInstaller.php": "4725b1961efa2dd3952f67d3fd06cc9bca075820d62026ec6df173d3229ce840",
     "wplite/vendor/sqlite/db.copy": "a5d2ea2b67f50a1ba63e6f90aef45fd0e96ad8ace48e409096be43569dd685a3",
