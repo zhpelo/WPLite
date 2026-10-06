@@ -11,6 +11,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+if (!(defined('WPLITE_INSTALL_AUTHORIZED') && WPLITE_INSTALL_AUTHORIZED)
+    && get_option('wplite_site_id') !== WPLITE_SITE_ID) {
+    wp_die('The SQLite database does not belong to this WPLite installation.', 'WPLite site mismatch', ['response' => 503]);
+}
+
 // Development releases must not install an unvalidated WordPress core over the
 // distribution. Plugin/theme update channels remain available. The signed bundle
 // updater will replace this guard when that milestone is complete.

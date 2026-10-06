@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 if (!defined('WPLITE_BOOTSTRAPPED') || !WPLITE_BOOTSTRAPPED) {
     http_response_code(503);
-    exit('WPLite requires its matching wp-config.php bootstrap.');
+    echo 'WPLite requires its matching wp-config.php bootstrap.';
+    exit(1);
 }
 
 define('SQLITE_JOURNAL_MODE', 'WAL');
@@ -27,5 +28,6 @@ try {
 } catch (Throwable $wpliteError) {
     error_log('WPLite database settings: ' . $wpliteError->getMessage());
     http_response_code(503);
-    exit('WPLite cannot verify safe database settings. See the server error log.');
+    echo 'WPLite cannot verify safe database settings. See the server error log.';
+    exit(1);
 }
