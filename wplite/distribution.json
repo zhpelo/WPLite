@@ -15,7 +15,7 @@
   },
   "file_manifest_version": 1,
   "files": {
-    "WPLITE.md": "82e6a250a33d00552772169f3eb264a8bcba384618ba30a48e991c1ef27dc6bd",
+    "WPLITE.md": "2876b461804da78f6989af48cdc0b9424fabbaeb10d18dca210fe717fdb11527",
     "wp-config.php": "d427c15ebec33026b6d6a5cf5e94e3809ecf07a550d92280e0aac4b5d701c6e4",
     "wp-content/db.php": "a928588e93926d7bd6500a7fdf01b2e26b235166cac5b9aed2ce356152e10af8",
     "wp-content/mu-plugins/wplite.php": "0f7309028cf078277defd756f613776184403dd7397c83b7f94bdc5fa965cf8a",

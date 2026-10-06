@@ -30,8 +30,8 @@ The data directory must not already exist, and its parent must be writable by
 PHP. It must be outside the public web root and on the same host's local disk.
 If WordPress is in a subdirectory of a larger document root, supply
 `--public-root /actual/public/root` as well. This CLI prototype deliberately does
-not support storing data under the public root; guarded shared-hosting storage
-will be added with the web installer.
+not support storing data under the public root; use the Web installer for
+HTTP-verified shared-hosting storage.
 
 Keep `wp-config.php`, the private data directory, and the matching system files
 together. Do not delete `site.json`, move `DB_PATH`, disable the database drop-in,
