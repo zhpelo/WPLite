@@ -25,7 +25,7 @@ final class Backup
         return $key;
     }
 
-    private static function target(string $path, string $publicRoot, string $protectedData): string
+    public static function target(string $path, string $publicRoot, string $protectedData): string
     {
         if (!str_starts_with($path, '/') || str_contains($path, "\0") || in_array('..', explode('/', $path), true)) {
             throw new \RuntimeException('Backup output must be an absolute path without parent traversal.');
@@ -42,7 +42,7 @@ final class Backup
         return $target;
     }
 
-    private static function durableWrite(string $file, string $contents): void
+    public static function durableWrite(string $file, string $contents): void
     {
         $handle = fopen($file, 'x+b');
         if ($handle === false) {
@@ -57,6 +57,35 @@ final class Backup
         } finally {
             fclose($handle);
         }
+    }
+
+    /** Caller must own the operation lock and validate the private destination. */
+    public static function snapshot(\PDO $source, string $file, string $prefix, string $siteId): array
+    {
+        if ($source->inTransaction() || file_exists($file) || is_link($file)
+            || !preg_match('/^[a-zA-Z0-9_]+$/D', $prefix)) {
+            throw new \RuntimeException('Snapshot requires an idle connection and a fresh private destination.');
+        }
+        $query = $source->prepare('VACUUM INTO :destination');
+        $query->execute([':destination' => $file]);
+        $query->closeCursor();
+        chmod($file, 0600);
+        $handle = fopen($file, 'r+b');
+        if ($handle === false) {
+            throw new \RuntimeException('Cannot flush the database snapshot.');
+        }
+        try {
+            if (!fflush($handle) || (function_exists('fsync') && !fsync($handle))) {
+                throw new \RuntimeException('Cannot durably flush the database snapshot.');
+            }
+        } finally {
+            fclose($handle);
+        }
+        $details = self::inspectDatabase($file, $prefix);
+        if (!hash_equals($siteId, $details['site_id'])) {
+            throw new \RuntimeException('Snapshot belongs to a different site.');
+        }
+        return $details;
     }
 
     public static function create(\PDO $source, string $root, string $data, string $siteId,
@@ -114,27 +143,7 @@ final class Backup
                 throw new \RuntimeException('Cannot exclusively create the private backup directory.');
             }
             $file = $target . '/database.sqlite';
-            $query = $source->prepare('VACUUM INTO :destination');
-            $query->execute([':destination' => $file]);
-            $query->closeCursor();
-            chmod($file, 0600);
-            $handle = fopen($file, 'r+b');
-            if ($handle === false) {
-                throw new \RuntimeException('Cannot flush the database snapshot.');
-            }
-            try {
-                if (!fflush($handle) || (function_exists('fsync') && !fsync($handle))) {
-                    throw new \RuntimeException('Cannot durably flush the database snapshot.');
-                }
-            } finally {
-                fclose($handle);
-            }
-            $snapshot = self::openSnapshot($file);
-            $details = self::databaseDetails($snapshot, $prefix);
-            if (!hash_equals($siteId, $details['site_id'])) {
-                throw new \RuntimeException('Snapshot belongs to a different site.');
-            }
-            unset($snapshot);
+            $details = self::snapshot($source, $file, $prefix, $siteId);
             $distribution = json_decode(file_get_contents($root . '/wplite/distribution.json'), true, flags: JSON_THROW_ON_ERROR);
             $manifest = ['format' => 1, 'kind' => 'database', 'site_id' => $siteId,
                 'table_prefix' => $prefix, 'created_at' => gmdate('c'),

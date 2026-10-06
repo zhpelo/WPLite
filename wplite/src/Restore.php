@@ -29,7 +29,7 @@ final class Restore
         return [$root, $data, $state];
     }
 
-    private static function runtime(string $root): void
+    public static function assertRuntime(string $root): void
     {
         $manifest = json_decode(file_get_contents($root . '/wplite/distribution.json'), true, flags: JSON_THROW_ON_ERROR);
         foreach ($manifest['files'] as $relative => $digest) {
@@ -129,7 +129,7 @@ final class Restore
             }
             $lease->record('validating');
             self::inspectLive($state);
-            self::runtime($root);
+            self::assertRuntime($root);
             $lease->record('complete');
             $lease->finish();
             return ['status' => 'restored', 'kind' => 'database', 'rollback_directory' => $rollback,
@@ -145,7 +145,7 @@ final class Restore
         [$root, $data, $state] = self::site($root, $data);
         $lease = Maintenance::acquire($data, resume: true);
         self::inspectLive($state);
-        self::runtime($root);
+        self::assertRuntime($root);
         $lease->finish();
         return ['status' => 'reopened'];
     }
@@ -201,7 +201,7 @@ final class Restore
             }
         }
         self::inspectLive($state);
-        self::runtime($root);
+        self::assertRuntime($root);
         $lease->finish();
         return ['status' => 'rolled-back', 'preserved_directory' => $displaced];
     }
