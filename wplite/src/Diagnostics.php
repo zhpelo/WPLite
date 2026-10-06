@@ -56,7 +56,13 @@ final class Diagnostics
                 throw new \RuntimeException('Invalid manifest.');
             }
             $manifest = json_decode(@file_get_contents($manifestFile), true, flags: JSON_THROW_ON_ERROR);
-            if (($manifest['file_manifest_version'] ?? null) !== 1 || empty($manifest['files'])) {
+            if (($manifest['file_manifest_version'] ?? null) !== 1 || empty($manifest['files'])
+                || !is_string($manifest['wplite_version'] ?? null)
+                || !preg_match('/^[0-9A-Za-z][0-9A-Za-z.+_-]*$/D', $manifest['wplite_version'])
+                || !is_string($manifest['wordpress']['tag'] ?? null)
+                || !preg_match('/^[0-9]+\.[0-9]+(?:\.[0-9]+)?$/D', $manifest['wordpress']['tag'])
+                || !is_string($manifest['sqlite']['tag'] ?? null)
+                || !preg_match('/^v[0-9]+\.[0-9]+\.[0-9]+$/D', $manifest['sqlite']['tag'])) {
                 throw new \RuntimeException('Incomplete manifest.');
             }
             foreach ($manifest['files'] as $relative => $digest) {
@@ -176,7 +182,7 @@ final class Diagnostics
         $report['cron'] = CronProbe::status();
         $report['ok'] = !$report['errors'];
         $report['capabilities']['content'] = $report['ok'] ? 'basic_runtime_ready' : 'blocked';
-        $report['capabilities']['scheduled_features'] = $report['cron']['execution_observed'] ? 'observed_once' : 'unverified';
+        $report['capabilities']['scheduled_features'] = $report['cron']['recent_observation'] ? 'observed_once' : 'unverified';
         return $report;
     }
 }

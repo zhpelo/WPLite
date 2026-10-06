@@ -27,6 +27,6 @@ wp_nonce_field('wplite_cron_probe');
 echo '<label>检查方式 <select name="transport"><option value="schedule">仅安排，等待现有 Cron 服务执行</option><option value="loopback">安排并请求本站 wp-cron.php</option></select></label> ';
 submit_button('安排一次性探针', 'secondary', 'submit', false);
 echo '</form><p>稍后刷新本页查看实际执行记录。若采用外部 Cron，请让原有调度器正常运行；CLI 可调用 php wp-cron.php，注意它也会执行其他到期任务。</p>';
-echo '<h2>可导出的安全报告</h2><p>报告不包含数据目录、站点身份、盐值、安装密钥或备份认证密钥。公开目录 HTTP 记录仅表示安装时的检查，本页没有重新验证服务器规则。</p>';
+echo '<h2>已去除私密字段的运行报告</h2><p>报告不包含数据目录、站点身份、盐值、安装密钥或备份认证密钥。仍含版本与磁盘余量，分享前请检查用途。公开目录 HTTP 记录仅表示安装时的检查，本页没有重新验证服务器规则。</p>';
 echo '<pre id="wplite-diagnostics-json" style="white-space:pre-wrap">' . esc_html(wp_json_encode($wpliteReport, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) . '</pre></div>';
 unset($wpliteReport, $wpliteLabel, $wpliteValue);

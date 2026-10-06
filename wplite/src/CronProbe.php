@@ -8,6 +8,7 @@ final class CronProbe
 {
     public const HOOK = 'wplite_diagnostic_canary';
     public const OPTION = 'wplite_cron_probe';
+    private static bool $invalidRecord = false;
 
     private static function distribution(): string
     {
@@ -20,7 +21,12 @@ final class CronProbe
         // its local/external object cache. Never write an old cached snapshot.
         wp_cache_delete(self::OPTION, 'options');
         wp_cache_delete('notoptions', 'options');
-        $record = get_option(self::OPTION, []);
+        $missing = new \stdClass();
+        $record = get_option(self::OPTION, $missing);
+        self::$invalidRecord = false;
+        if ($record === $missing) {
+            return [];
+        }
         if (!is_array($record) || ($record['format'] ?? null) !== 1
             || !is_string($record['id'] ?? null) || !preg_match('/^[a-f0-9]{32}$/D', $record['id'])
             || !is_int($record['requested_at'] ?? null) || !is_int($record['deadline'] ?? null)
@@ -29,6 +35,7 @@ final class CronProbe
             || !in_array($record['state'] ?? '', ['pending', 'executed', 'failed'], true)
             || !is_array($record['http'] ?? null)
             || !is_string($record['distribution'] ?? null) || !preg_match('/^[a-f0-9]{64}$/D', $record['distribution'])) {
+            self::$invalidRecord = true;
             return [];
         }
         return $record;
@@ -74,7 +81,7 @@ final class CronProbe
         $observed = $current && $record['state'] === 'executed'
             && is_int($record['executed_at'] ?? null) && $record['executed_at'] >= $record['requested_at']
             && $record['executed_at'] <= time() + 60 && in_array($record['runner'] ?? '', ['cli', 'http'], true);
-        $phase = !$record ? 'not_requested' : (!$current ? 'stale_release' : $record['state']);
+        $phase = !$record ? (self::$invalidRecord ? 'invalid_record' : 'not_requested') : (!$current ? 'stale_release' : $record['state']);
         if ($phase === 'executed' && !$observed) {
             $phase = 'invalid_record';
         }
@@ -93,6 +100,8 @@ final class CronProbe
             'executed_at' => $observed ? $record['executed_at'] : null,
             'observed_runner' => $observed ? $record['runner'] : null,
             'latency_seconds' => $observed ? $record['executed_at'] - $record['requested_at'] : null,
+            'observation_age_seconds' => $observed ? max(0, time() - $record['executed_at']) : null,
+            'recent_observation' => (bool) ($observed && time() - $record['executed_at'] <= 86400),
             'http' => ['status' => in_array($http['status'] ?? '', ['attempted', 'response_received', 'failed'], true) ? $http['status'] : 'not_requested',
                 'code' => is_int($http['code'] ?? null) ? $http['code'] : null],
             'recurring_scheduler_verified' => false, 'external_scheduler_configured' => 'unknown'];
