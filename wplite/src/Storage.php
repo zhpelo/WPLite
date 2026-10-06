@@ -140,14 +140,22 @@ final class Storage
             if ($status !== 200 || $body !== $challenge) {
                 throw new \RuntimeException('The public control probe did not return its exact challenge. Check the site URL, mapping and HTTP cache.');
             }
-            foreach ([$name . '.sqlite', $name . '.sqlite-wal', $name . '.sqlite-shm', $name . '.json', '.' . $name,
-                'backups-' . $id . '/database.sqlite', 'rollback-' . $id . '/site.sqlite'] as $relative) {
+            // Test the real sensitive names/prefixes, not merely similarly
+            // suffixed random files that a narrower server rule might deny.
+            foreach (['site.sqlite', 'site.sqlite-wal', 'site.sqlite-shm', 'site.json', '.' . $name,
+                'backups/' . $id . '/database.sqlite', 'rollback/' . $id . '/site.sqlite'] as $relative) {
                 $file = $data . '/' . $relative;
                 if (dirname($file) !== $data) {
-                    if (!mkdir(dirname($file), 0700)) {
-                        throw new \RuntimeException('Cannot create a nested storage probe.');
+                    $directory = $data;
+                    foreach (explode('/', dirname($relative)) as $component) {
+                        $directory .= '/' . $component;
+                        if (!is_dir($directory)) {
+                            if (!mkdir($directory, 0700)) {
+                                throw new \RuntimeException('Cannot create a nested storage probe.');
+                            }
+                            $directories[] = $directory;
+                        }
                     }
-                    $directories[] = dirname($file);
                 }
                 self::freshFile($file, $challenge);
                 $created[] = $file;

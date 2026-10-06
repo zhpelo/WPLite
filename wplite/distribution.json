@@ -15,7 +15,7 @@
   },
   "file_manifest_version": 1,
   "files": {
-    "WPLITE.md": "58ac022cc34355d60aafa755fb1c0cf3322102c06972d34b6b3265fba06f4072",
+    "WPLITE.md": "82e6a250a33d00552772169f3eb264a8bcba384618ba30a48e991c1ef27dc6bd",
     "wp-config.php": "d427c15ebec33026b6d6a5cf5e94e3809ecf07a550d92280e0aac4b5d701c6e4",
     "wp-content/db.php": "a928588e93926d7bd6500a7fdf01b2e26b235166cac5b9aed2ce356152e10af8",
     "wp-content/mu-plugins/wplite.php": "0f7309028cf078277defd756f613776184403dd7397c83b7f94bdc5fa965cf8a",
@@ -28,7 +28,7 @@
     "wplite/src/Installer.php": "3feb4bb94598d91cb0d0ef3f1643f9942e6d0282fd6595c913695241e0717226",
     "wplite/src/Maintenance.php": "c14c347992f215f1417ac833bd35128d0dfe429b708474c5292700922c979642",
     "wplite/src/Restore.php": "851c1d7813ea941f01ad3dde3dd37a03727edd3f3f0a4a1e1aa9692dc4f2452a",
-    "wplite/src/Storage.php": "11fdbfdd9da0219724dd752e77ef63983edb0510c5bdd5422508f1b06658aa0a",
+    "wplite/src/Storage.php": "a78046fa391359056d615e46b883e8f4ac43677d0813ba96760b765a7abf09ba",
     "wplite/src/WebInstaller.php": "4725b1961efa2dd3952f67d3fd06cc9bca075820d62026ec6df173d3229ce840",
     "wplite/vendor/sqlite/db.copy": "a5d2ea2b67f50a1ba63e6f90aef45fd0e96ad8ace48e409096be43569dd685a3",
     "wplite/vendor/sqlite/integrations/query-monitor/boot.php": "6bd0a492beb2e71953e1ce4a38b8833a1a2ae224edd67daf2867510482e26817",

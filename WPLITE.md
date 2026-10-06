@@ -4,8 +4,8 @@ This distribution defaults to SQLite and includes the WordPress community SQLite
 driver as a mandatory system component. No MySQL service is needed.
 
 This is an early development build, **not a certified production release**. The
-web installer, signed bundle updater and complete backup/recovery UI are not yet
-implemented. Direct WordPress core updates are blocked to prevent installing an
+owner-authorized Web installer is available; the signed bundle updater and
+complete backup/recovery UI are not yet implemented. Direct WordPress core updates are blocked to prevent installing an
 untested core/driver combination. Do not deploy this build on a live store.
 
 ## Initial CLI installation
@@ -38,6 +38,38 @@ together. Do not delete `site.json`, move `DB_PATH`, disable the database drop-i
 or copy only the live `.sqlite` file as a backup. WAL data can contain committed
 transactions that have not reached the main file.
 
+## Initial Web installation (no server SSH)
+
+On your own computer, use the project's `tools/prepare_web_install.py` to create
+a new private local directory containing setup-key.php and owner-secret.txt.
+Upload **only setup-key.php** to this site's wplite/ directory with the hosting
+file manager. Never upload owner-secret.txt. Open the site over HTTPS and supply
+the local secret in the SQLite installation form within one hour of the key
+file's modification time. The used server key is deleted on success; an existing
+or incomplete site configuration closes the installation endpoint.
+
+Prefer a new absolute data path outside the actual document root. Leaving it
+blank attempts .wplite-data under the site. Before any database or site secrets
+are written there, installation checks a public random control response plus
+HTTP 403/404 denial of database, WAL, SHM, JSON, hidden and nested probe files.
+It does not follow redirects or accept timeouts/500 errors as protection.
+Loopback HTTP(S) and an available PHP worker are required for these checks.
+
+Apache must actually enforce the generated `Require all denied` rule. Nginx
+requires an explicit location denying the entire directory and descendants;
+it does not read .htaccess. A failed privacy check leaves only an owned prepared
+directory and never a database; configure server protection and retry. Do not
+delete unknown data to work around installation failures.
+
+The immutable root wp-config.php now loads the generated wplite/site-config.php.
+Keep the **site configuration**, storage metadata and matching release together.
+Existing development installations are not automatically migrated. A missing or
+altered deny file stops a protected public-storage site; changes to external
+web-server/CDN rules still require manual HTTP protection revalidation.
+
+Full instructions and the local key tool:
+https://github.com/zhpelo/WPLite/blob/main/docs/web-install.md
+
 ## Database backup and recovery (development CLI)
 
 ```sh
@@ -52,6 +84,9 @@ kept only in private `site.json`. Keep that private state safe; losing it means
 these authenticated recovery commands cannot verify your backups. The optional
 `backup-create --output-dir /private/NEW-DIRECTORY` must name a new directory
 outside the actual public document root. Existing backups are never overwritten.
+For Web-installed protected storage, the default backups subdirectory can also
+reside inside the same HTTP-denied data tree; arbitrary public directories remain
+forbidden. Independent database recovery supports that verified storage mode.
 
 These are **database-only** backups: they do not contain uploads, plugins,
 themes, wp-config.php or the backup authentication key. Full-site backups and
