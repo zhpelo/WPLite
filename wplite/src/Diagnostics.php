@@ -55,7 +55,7 @@ final class Diagnostics
             if (!is_file($manifestFile) || is_link($manifestFile) || filesize($manifestFile) > 2 * 1024 * 1024) {
                 throw new \RuntimeException('Invalid manifest.');
             }
-            $manifest = json_decode(file_get_contents($manifestFile), true, flags: JSON_THROW_ON_ERROR);
+            $manifest = json_decode(@file_get_contents($manifestFile), true, flags: JSON_THROW_ON_ERROR);
             if (($manifest['file_manifest_version'] ?? null) !== 1 || empty($manifest['files'])) {
                 throw new \RuntimeException('Incomplete manifest.');
             }
@@ -68,7 +68,7 @@ final class Diagnostics
                 $file = $root . '/' . $relative;
                 $resolved = realpath($file);
                 if ($resolved === false || !Environment::isWithin($resolved, $root) || !is_file($file)
-                    || is_link($file) || !hash_equals($digest, hash_file('sha256', $file))) {
+                    || is_link($file) || !hash_equals($digest, @hash_file('sha256', $file))) {
                     throw new \RuntimeException('Managed file mismatch.');
                 }
             }
@@ -86,7 +86,7 @@ final class Diagnostics
             $report['errors'][] = 'runtime_mismatch';
         }
         try {
-            Storage::assertInstalled($data, $state);
+            @Storage::assertInstalled($data, $state);
             $report['storage']['mode'] = Environment::isWithin($data, $state['public_root']) ? 'http-denied' : 'private';
             $report['storage']['configuration'] = 'matched';
             $report['storage']['http_verified_at'] = $state['storage']['verified_at'] ?? null;
@@ -106,7 +106,7 @@ final class Diagnostics
             $report['warnings'][] = 'low_database_backup_headroom';
         }
         try {
-            $report['maintenance'] = Maintenance::status($data)['phase'] === 'inactive' ? 'inactive' : 'active';
+            $report['maintenance'] = @Maintenance::status($data)['phase'] === 'inactive' ? 'inactive' : 'active';
             if ($report['maintenance'] === 'active') {
                 $report['errors'][] = 'maintenance_active';
             }
