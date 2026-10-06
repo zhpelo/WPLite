@@ -148,7 +148,7 @@ final class Backup
         }
     }
 
-    private static function openSnapshot(string $file): \PDO
+    private static function openSnapshot(string $file, bool $immutable = true): \PDO
     {
         $handle = fopen($file, 'rb');
         if ($handle === false) {
@@ -161,8 +161,17 @@ final class Backup
         } finally {
             fclose($handle);
         }
-        $uri = 'file:' . str_replace('%2F', '/', rawurlencode($file)) . '?mode=ro&immutable=1';
+        $uri = 'file:' . str_replace('%2F', '/', rawurlencode($file)) . ($immutable ? '?mode=ro&immutable=1' : '?mode=rw');
         return new \PDO('sqlite:' . $uri, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+    }
+
+    public static function inspectDatabase(string $file, string $prefix, bool $immutable = true): array
+    {
+        if (!is_file($file) || is_link($file) || !preg_match('/^[a-zA-Z0-9_]+$/D', $prefix)) {
+            throw new \RuntimeException('An existing regular database and valid table prefix are required.');
+        }
+        $pdo = self::openSnapshot($file, $immutable);
+        return self::databaseDetails($pdo, $prefix);
     }
 
     private static function databaseDetails(\PDO $pdo, string $prefix): array
@@ -220,6 +229,7 @@ final class Backup
         unset($snapshot);
         return ['status' => 'verified', 'kind' => 'database', 'authenticated' => true,
             'site_id' => $siteId, 'wordpress' => $manifest['wordpress'], 'sqlite_driver' => $manifest['sqlite_driver'],
+            'table_prefix' => $manifest['table_prefix'], 'wordpress_db_version' => $manifest['wordpress_db_version'],
             'distribution_sha256' => $manifest['distribution_sha256'], 'database_sha256' => $manifest['database_sha256'],
             'bytes' => $manifest['database_bytes']];
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 // This file is required by wp-config.php before wp-settings.php. MU plugins load
 // too late to prevent a missing/replaced db.php from falling back to MySQL.
 require_once __DIR__ . '/src/Environment.php';
+require_once __DIR__ . '/src/Maintenance.php';
 
 try {
     \WPLite\Environment::requireSupported();
@@ -25,6 +26,7 @@ try {
         throw new RuntimeException('The database path or site identity does not match its installation state.');
     }
     $wpliteInstalling = defined('WPLITE_INSTALL_AUTHORIZED') && WPLITE_INSTALL_AUTHORIZED;
+    $GLOBALS['wplite_request_lock'] = \WPLite\Maintenance::guard(dirname(DB_PATH));
     if (($wpliteState['status'] ?? '') !== 'installed' && !$wpliteInstalling) {
         throw new RuntimeException('Installation is incomplete. Resume recovery using the private installation tools.');
     }
@@ -39,6 +41,7 @@ try {
     } else {
         http_response_code(503);
         header('Content-Type: text/plain; charset=utf-8');
+        header('Retry-After: 30');
         echo 'WPLite cannot start safely. Check the server error log and restore the matching database components.';
         error_log('WPLite: ' . $wpliteError->getMessage());
     }
