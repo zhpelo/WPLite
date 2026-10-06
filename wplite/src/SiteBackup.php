@@ -14,6 +14,9 @@ final class SiteBackup
     private static function site(string $root, string $data): array
     {
         Environment::requireSupported();
+        if (!function_exists('fsync') || !function_exists('flock')) {
+            throw new \RuntimeException('Full site backup requires enabled fsync and flock support.');
+        }
         if (is_link($root) || is_link($data)) {
             throw new \RuntimeException('Site backup requires real installation and data directories.');
         }
