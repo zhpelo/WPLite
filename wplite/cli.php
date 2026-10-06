@@ -9,9 +9,9 @@ if (PHP_SAPI !== 'cli') {
 require_once __DIR__ . '/src/Environment.php';
 
 /** Return a named CLI argument without accepting duplicate/unknown flags. */
-function wpliteArguments(array $arguments): array
+function wpliteArguments(array $arguments, ?array $accepted = null): array
 {
-    $accepted = ['url', 'title', 'admin-user', 'admin-email', 'password-env', 'data-dir', 'public-root', 'table-prefix'];
+    $accepted ??= ['url', 'title', 'admin-user', 'admin-email', 'password-env', 'data-dir', 'public-root', 'table-prefix'];
     $result = [];
     for ($i = 0; $i < count($arguments); ++$i) {
         if (!preg_match('/^--([a-z-]+)$/D', $arguments[$i], $match)
@@ -31,8 +31,27 @@ try {
         echo json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . PHP_EOL;
         exit($report['ok'] ? 0 : 1);
     }
+    if ($command === 'backup-create' || $command === 'backup-verify') {
+        require_once __DIR__ . '/src/Backup.php';
+        if ($command === 'backup-verify') {
+            $options = wpliteArguments(array_slice($argv, 2), ['backup-dir', 'data-dir']);
+            if (empty($options['backup-dir']) || empty($options['data-dir'])) {
+                throw new RuntimeException('backup-verify requires --backup-dir and the original private --data-dir.');
+            }
+            $state = \WPLite\Environment::readState($options['data-dir']);
+            $report = \WPLite\Backup::verify($options['backup-dir'], \WPLite\Backup::backupKey($state), $state['site_id']);
+        } else {
+            $options = wpliteArguments(array_slice($argv, 2), ['output-dir']);
+            require dirname(__DIR__) . '/wp-load.php';
+            $report = \WPLite\Backup::create($GLOBALS['wpdb']->get_driver()->get_sqlite_pdo(),
+                ABSPATH, dirname(DB_PATH), WPLITE_SITE_ID, $GLOBALS['table_prefix'],
+                $options['output-dir'] ?? null, defined('WPLITE_PUBLIC_ROOT') ? WPLITE_PUBLIC_ROOT : ABSPATH);
+        }
+        echo json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . PHP_EOL;
+        exit;
+    }
     if ($command !== 'install') {
-        throw new RuntimeException('Commands: doctor, install. This development build does not yet include the web installer/updater.');
+        throw new RuntimeException('Commands: doctor, install, backup-create, backup-verify. The Web installer/updater and restore are still in development.');
     }
     \WPLite\Environment::requireSupported();
     $options = wpliteArguments(array_slice($argv, 2));
@@ -90,6 +109,7 @@ try {
     $constants = ['DB_ENGINE' => 'sqlite', 'DB_NAME' => 'wplite', 'DB_PATH' => $database,
         'DB_USER' => '', 'DB_PASSWORD' => '', 'DB_HOST' => '', 'DB_CHARSET' => 'utf8mb4',
         'DB_COLLATE' => '', 'WPLITE_SITE_ID' => $siteId, 'WP_HOME' => $url, 'WP_SITEURL' => $url,
+        'WPLITE_PUBLIC_ROOT' => $publicRoot,
         'WP_DEBUG' => false, 'WP_DEBUG_DISPLAY' => false, 'WP_AUTO_UPDATE_CORE' => false];
     foreach (['AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY', 'AUTH_SALT', 'SECURE_AUTH_SALT', 'LOGGED_IN_SALT', 'NONCE_SALT'] as $salt) {
         $constants[$salt] = bin2hex(random_bytes(48));
