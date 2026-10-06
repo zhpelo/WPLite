@@ -27,9 +27,39 @@ function wpliteArguments(array $arguments, ?array $accepted = null): array
 try {
     $command = $argv[1] ?? 'doctor';
     if ($command === 'doctor') {
-        $report = \WPLite\Environment::inspect();
+        $options = wpliteArguments(array_slice($argv, 2), ['data-dir', 'integrity']);
+        if (!in_array($options['integrity'] ?? 'none', ['none', 'quick'], true)
+            || (isset($options['integrity']) && !isset($options['data-dir']))) {
+            throw new RuntimeException('Use --integrity none|quick with an installed --data-dir.');
+        }
+        if (isset($options['data-dir'])) {
+            require_once __DIR__ . '/src/Diagnostics.php';
+            $report = \WPLite\Diagnostics::offline(dirname(__DIR__), $options['data-dir'], ($options['integrity'] ?? '') === 'quick');
+        } else {
+            $report = \WPLite\Environment::inspect();
+        }
         echo json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . PHP_EOL;
         exit($report['ok'] ? 0 : 1);
+    }
+    if (in_array($command, ['doctor-site', 'cron-probe', 'cron-status'], true)) {
+        $options = wpliteArguments(array_slice($argv, 2), match ($command) {
+            'doctor-site' => ['integrity'], 'cron-probe' => ['transport'], 'cron-status' => ['require-execution'],
+        });
+        if (($command === 'doctor-site' && !in_array($options['integrity'] ?? 'none', ['none', 'quick'], true))
+            || ($command === 'cron-status' && !in_array($options['require-execution'] ?? 'no', ['yes', 'no'], true))) {
+            throw new RuntimeException('Invalid diagnostic option value.');
+        }
+        require dirname(__DIR__) . '/wp-load.php';
+        require_once __DIR__ . '/src/Diagnostics.php';
+        require_once __DIR__ . '/src/CronProbe.php';
+        $report = match ($command) {
+            'doctor-site' => \WPLite\Diagnostics::site(($options['integrity'] ?? '') === 'quick'),
+            'cron-probe' => \WPLite\CronProbe::start($options['transport'] ?? 'schedule'),
+            'cron-status' => \WPLite\CronProbe::status(),
+        };
+        echo json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . PHP_EOL;
+        exit(($command === 'doctor-site' && !$report['ok'])
+            || ($command === 'cron-status' && ($options['require-execution'] ?? '') === 'yes' && !$report['execution_observed']) ? 1 : 0);
     }
     if ($command === 'backup-create' || $command === 'backup-verify') {
         require_once __DIR__ . '/src/Backup.php';
@@ -66,7 +96,7 @@ try {
         exit;
     }
     if ($command !== 'install') {
-        throw new RuntimeException('Commands: doctor, install, backup-create, backup-verify, restore, restore-status, restore-rollback, restore-complete.');
+        throw new RuntimeException('Commands: doctor, doctor-site, cron-probe, cron-status, install, backup-create, backup-verify, restore, restore-status, restore-rollback, restore-complete.');
     }
     require_once __DIR__ . '/src/Installer.php';
     $options = wpliteArguments(array_slice($argv, 2));
