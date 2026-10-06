@@ -135,7 +135,7 @@ final class SiteBackup
         }
     }
 
-    public static function create(string $root, string $data, ?string $output = null): array
+    public static function create(string $root, string $data, ?string $output = null, ?string $publicOrigin = null): array
     {
         [$root, $data, $state] = self::site($root, $data);
         $lease = Maintenance::acquire($data, type: 'site-backup');
@@ -158,6 +158,15 @@ final class SiteBackup
                 $output = $parent . '/site-' . gmdate('Ymd\THis\Z') . '-' . bin2hex(random_bytes(6));
             }
             $target = Backup::target($output, $state['public_root'], $data);
+            if (Environment::isWithin($target, $state['public_root']) && $publicOrigin === null) {
+                throw new \RuntimeException('Public-root full backups require --public-origin for fresh HTTP protection verification.');
+            }
+            if (!mkdir($target, 0700)) {
+                throw new \RuntimeException('Cannot exclusively create the full site snapshot.');
+            }
+            if (Environment::isWithin($target, $state['public_root'])) {
+                Storage::probeSiteBackup($root, $state['public_root'], $target, $publicOrigin ?? '');
+            }
             $lease->record('inventory');
             $original = self::inventory($root, $data);
             foreach (['', '-wal', '-shm'] as $suffix) {
@@ -180,7 +189,7 @@ final class SiteBackup
                 || $free < $total + $databaseBytes * 2 + 16 * 1024 * 1024) {
                 throw new \RuntimeException('Insufficient or unknown free space for full site backup.');
             }
-            if (!mkdir($target, 0700) || !mkdir($target . '/site', 0700)) {
+            if (!mkdir($target . '/site', 0700)) {
                 throw new \RuntimeException('Cannot exclusively create the full site snapshot.');
             }
             $lease->record('snapshotting');

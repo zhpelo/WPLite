@@ -64,7 +64,7 @@ try {
     if (in_array($command, ['site-backup-create', 'site-backup-verify', 'site-backup-complete'], true)) {
         require_once __DIR__ . '/src/SiteBackup.php';
         $accepted = match ($command) {
-            'site-backup-create' => ['data-dir', 'output-dir'],
+            'site-backup-create' => ['data-dir', 'output-dir', 'public-origin'],
             'site-backup-verify' => ['data-dir', 'backup-dir'],
             'site-backup-complete' => ['data-dir'],
         };
@@ -77,7 +77,7 @@ try {
             $report = \WPLite\SiteBackup::verify($options['backup-dir'], \WPLite\Backup::backupKey($state), $state['site_id']);
         } else {
             $report = $command === 'site-backup-create'
-                ? \WPLite\SiteBackup::create(dirname(__DIR__), $options['data-dir'], $options['output-dir'] ?? null)
+                ? \WPLite\SiteBackup::create(dirname(__DIR__), $options['data-dir'], $options['output-dir'] ?? null, $options['public-origin'] ?? null)
                 : \WPLite\SiteBackup::complete(dirname(__DIR__), $options['data-dir']);
         }
         echo json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . PHP_EOL;

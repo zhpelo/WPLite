@@ -176,6 +176,14 @@ direct database writers must be stopped first. Links, special files and changes
 outside the drained request protocol reject the snapshot. Current limits are
 50,000 entries, 64 path components and a 16 MiB manifest.
 
+If the output is inside HTTP-denied public-root data storage, also pass
+`--public-origin https://example.com` (scheme/host/port, no site path). Before
+copying any real database or configuration, every such backup requires a fresh
+public control challenge and HTTP denial of the new database/JSON/PHP/image/text
+layout. Installation-time protection alone is insufficient. Valid HTTPS is
+required except on loopback; redirects, errors and leaking denials are rejected.
+Private-root output needs no origin and performs no HTTP probe.
+
 Snapshots contain configuration salts and application secrets and are **not
 encrypted**. Keep them private and use encrypted off-site storage. The backup key
 is deliberately excluded; independently retain the original private site.json
