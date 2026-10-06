@@ -182,7 +182,7 @@ is deliberately excluded; independently retain the original private site.json
 in a protected recovery vault. Never authenticate a backup using a key supplied
 by that same backup. These snapshots are not public distribution ZIPs.
 
-A killed backup owner leaves traffic at HTTP 503 and an incomplete snapshot.
+An owner killed during copying leaves traffic at HTTP 503 and an incomplete snapshot.
 After inspecting the cause, `site-backup-complete --data-dir /private/site`
 checks the unchanged database/runtime and closes only a site-backup maintenance
 window. It does not restore files or resume copying. Do not use database restore

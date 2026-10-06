@@ -137,8 +137,8 @@ final class SiteBackup
         [$root, $data, $state] = self::site($root, $data);
         $lease = Maintenance::acquire($data, type: 'site-backup');
         try {
+            [$root, $data, $state] = self::site($root, $data);
             Restore::assertRuntime($root);
-            $state = Environment::readState($data);
             if (!isset($state['backup_key'])) {
                 $state['backup_key'] = bin2hex(random_bytes(32));
                 Environment::writeState($data, $state);
@@ -308,6 +308,7 @@ final class SiteBackup
     {
         [$root, $data, $state] = self::site($root, $data);
         $lease = Maintenance::acquire($data, resume: true, type: 'site-backup');
+        [$root, $data, $state] = self::site($root, $data);
         $details = Backup::inspectDatabase($state['database'], $state['table_prefix'], false);
         if (!hash_equals($state['site_id'], $details['site_id'])) {
             throw new \RuntimeException('Cannot reopen an unrelated database after interrupted backup.');
