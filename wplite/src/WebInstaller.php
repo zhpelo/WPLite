@@ -72,6 +72,17 @@ final class WebInstaller
         header('X-Content-Type-Options: nosniff');
         header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
         header('X-Frame-Options: DENY');
+        try {
+            $tls = in_array(strtolower((string) ($_SERVER['HTTPS'] ?? '')), ['on', '1'], true);
+            $public = realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
+            $prefix = $public !== false ? substr($root, strlen(rtrim($public, '/'))) : '';
+            $expected = ($tls ? 'https' : 'http') . '://' . strtolower($_SERVER['HTTP_HOST'] ?? '') . $prefix;
+            self::origin($root, $_SERVER, $expected);
+        } catch (\Throwable $error) {
+            http_response_code(400);
+            echo self::escape($error->getMessage());
+            return;
+        }
         if (file_exists($root . '/wplite/site-config.php') || is_link($root . '/wplite/site-config.php')) {
             http_response_code(410);
             echo 'WPLite installation is closed. Existing or incomplete installations are never overwritten.';
