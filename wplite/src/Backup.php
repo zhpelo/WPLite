@@ -183,7 +183,11 @@ final class Backup
         $query->execute([':name' => 'wplite_site_id']);
         $id = $query->fetchColumn();
         $query->execute([':name' => 'db_version']);
-        return ['site_id' => (string) $id, 'db_version' => (string) $query->fetchColumn()];
+        $version = (string) $query->fetchColumn();
+        if (!preg_match('/^[0-9]+$/D', $version)) {
+            throw new \RuntimeException('Database does not have a valid WordPress schema version.');
+        }
+        return ['site_id' => (string) $id, 'db_version' => $version];
     }
 
     public static function verify(string $directory, string $key, string $siteId): array

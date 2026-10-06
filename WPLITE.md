@@ -37,3 +37,46 @@ Keep `wp-config.php`, the private data directory, and the matching system files
 together. Do not delete `site.json`, move `DB_PATH`, disable the database drop-in,
 or copy only the live `.sqlite` file as a backup. WAL data can contain committed
 transactions that have not reached the main file.
+
+## Database backup and recovery (development CLI)
+
+```sh
+php wplite/cli.php backup-create
+php wplite/cli.php backup-verify --backup-dir /private/site/backups/BACKUP-ID --data-dir /private/site
+php wplite/cli.php restore --backup-dir /private/site/backups/BACKUP-ID --data-dir /private/site
+```
+
+Creation uses SQLite `VACUUM INTO`, flushes the standalone snapshot, checks
+integrity and site identity, and authenticates the manifest with a per-site key
+kept only in private `site.json`. Keep that private state safe; losing it means
+these authenticated recovery commands cannot verify your backups. The optional
+`backup-create --output-dir /private/NEW-DIRECTORY` must name a new directory
+outside the actual public document root. Existing backups are never overwritten.
+
+These are **database-only** backups: they do not contain uploads, plugins,
+themes, wp-config.php or the backup authentication key. Full-site backups and
+the authenticated Web recovery UI are still pending. The recovery commands
+require this build's site metadata and the exact matching WPLite release; they
+do not import arbitrary MySQL dumps or migrate earlier development installs.
+
+Restore is an explicit data rollback to the snapshot. It rejects new traffic
+with HTTP 503, waits for existing request shutdown hooks, preserves the original
+database and WAL/SHM components under the private `rollback/` directory, installs
+the snapshot, and checks integrity, identity, runtime files and core version
+before reopening. External scripts that open SQLite directly must be stopped;
+only WPLite requests and maintenance tools participate in its locks.
+
+If recovery is interrupted, the durable maintenance marker remains even after
+the owner process exits. Inspect it without loading WordPress:
+
+```sh
+php wplite/cli.php restore-status --data-dir /private/site
+php wplite/cli.php restore-rollback --data-dir /private/site
+```
+
+Rollback is available while maintenance is still active and the original
+database was preserved. It keeps displaced files for inspection. Alternatively,
+repair the matching system files and explicitly accept the already-restored
+snapshot using `restore-complete --data-dir /private/site`; health checks still
+must pass. These commands do not automatically rewind a site after it has
+reopened and accepted new orders.

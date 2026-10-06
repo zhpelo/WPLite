@@ -17,14 +17,14 @@ final class Maintenance
     /** Keep this resource alive until PHP finishes its shutdown hooks. */
     public static function guard(string $data)
     {
-        if (is_file($data . '/maintenance.json')) {
+        if (file_exists($data . '/maintenance.json') || is_link($data . '/maintenance.json')) {
             throw new \RuntimeException('WPLite maintenance is active.');
         }
         $handle = fopen($data . '/.requests.lock', 'c');
         if ($handle === false || !flock($handle, LOCK_SH | LOCK_NB)) {
             throw new \RuntimeException('WPLite is draining requests for maintenance.');
         }
-        if (is_file($data . '/maintenance.json')) {
+        if (file_exists($data . '/maintenance.json') || is_link($data . '/maintenance.json')) {
             flock($handle, LOCK_UN);
             fclose($handle);
             throw new \RuntimeException('WPLite maintenance is active.');
@@ -76,10 +76,10 @@ final class Maintenance
     public static function status(string $data): array
     {
         $marker = $data . '/maintenance.json';
-        if (!is_file($marker)) {
+        if (!file_exists($marker) && !is_link($marker)) {
             return ['phase' => 'inactive'];
         }
-        if (is_link($marker) || filesize($marker) > 64 * 1024) {
+        if (!is_file($marker) || is_link($marker) || filesize($marker) > 64 * 1024) {
             throw new \RuntimeException('Invalid maintenance journal.');
         }
         $journal = json_decode(file_get_contents($marker), true, flags: JSON_THROW_ON_ERROR);

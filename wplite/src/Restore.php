@@ -44,6 +44,11 @@ final class Restore
                 throw new \RuntimeException('Required WordPress configuration/core files are missing.');
             }
         }
+        $source = file_get_contents($root . '/wp-includes/version.php');
+        if (!preg_match('/\$wp_version\s*=\s*[\x27\x22]([^\x27\x22]+)[\x27\x22]/', $source, $match)
+            || $match[1] !== $manifest['wordpress']['tag']) {
+            throw new \RuntimeException('WordPress core version does not match the recovery release.');
+        }
     }
 
     private static function inspectLive(array $state): void
@@ -168,8 +173,9 @@ final class Restore
         foreach ([$name, $name . '-wal', $name . '-shm'] as $component) {
             $live = $data . '/' . $component;
             $saved = $rollback . '/' . $component;
-            if (is_link($live) || is_link($saved)) {
-                throw new \RuntimeException('Rollback refuses symbolic database components.');
+            if (is_link($live) || is_link($saved)
+                || (file_exists($live) && !is_file($live)) || (file_exists($saved) && !is_file($saved))) {
+                throw new \RuntimeException('Rollback requires regular database components.');
             }
             if (isset($originals[$component]) && !is_file($saved)) {
                 if (!is_file($live) || !hash_equals($originals[$component], hash_file('sha256', $live))) {
