@@ -15,6 +15,9 @@ final class Environment
 
     public static function requireSupported(): void
     {
+        if (DIRECTORY_SEPARATOR !== '/') {
+            throw new \RuntimeException('This WPLite version supports POSIX hosts (Linux/macOS) only.');
+        }
         if (PHP_VERSION_ID < 80300 || PHP_VERSION_ID >= 80600 || !extension_loaded('pdo_sqlite')) {
             throw new \RuntimeException('WPLite requires PHP 8.3–8.5 with PDO SQLite.');
         }

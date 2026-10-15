@@ -18,7 +18,8 @@ WPLite 不是 WordPress fork，不维护核心集成分支，不 rebase 官方�
 
 ## 全新站点安装
 
-要求 PHP 8.3–8.5、PDO SQLite、本地可写磁盘。SQLite 需要 3.51.3+（排除
+当前支持 Linux/macOS（POSIX 路径）、PHP 8.3–8.5、PDO SQLite、本地可写磁盘。
+SQLite 需要 3.51.3+（排除
 3.52.0），或已修复的 3.44.6/3.50.7。数据库必须在真实 Web 根目录之外；不支持
 网络共享磁盘、多站点或现有 MySQL 数据迁移。PHP 进程须能读取配置、写入私有数据。
 
