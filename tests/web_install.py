@@ -296,13 +296,25 @@ def main():
                     assert request(backup_url)[0] == 403
                     subprocess.run([str(php), '-n', str(site / 'wplite/cli.php'), 'restore', '--data-dir', str(data),
                         '--backup-dir', backup['directory']], check=True, capture_output=True, text=True)
+                    full = subprocess.run([str(php), '-n', str(site / 'wplite/cli.php'), 'site-backup-create',
+                        '--data-dir', str(data)], check=True, capture_output=True, text=True)
+                    full = json.loads(full.stdout)
+                    snapshot = Path(full['directory'])
+                    manifest = json.loads((snapshot / 'manifest.json').read_text())
+                    assert manifest['excluded_paths'] == ['.wplite-data']
+                    assert not (snapshot / 'site/.wplite-data').exists()
+                    full_url = url + '/.wplite-data/' + str(snapshot.relative_to(data))
+                    for relative in ['/manifest.json', '/database.sqlite', '/site/wplite/site-config.php']:
+                        assert request(full_url + relative)[0] == 403
+                    subprocess.run([str(php), '-n', str(site / 'wplite/cli.php'), 'site-backup-verify',
+                        '--data-dir', str(data), '--backup-dir', str(snapshot)], check=True, capture_output=True, text=True)
                     assert request(url + '/')[0] == 200
                     original = (data / '.htaccess').read_bytes()
                     (data / '.htaccess').write_text('# accidentally removed deny rule\n')
                     assert request(url + '/')[0] == 503
                     (data / '.htaccess').write_bytes(original)
                     assert request(url + '/')[0] == 200
-            print('PASS: real unprivileged Apache HTTP-denied storage, SQLite install, backup/restore and runtime deny-file tamper guard', flush=True)
+            print('PASS: real unprivileged Apache HTTP-denied storage, database backup/restore, full site snapshot exclusion/privacy and deny-file tamper guard', flush=True)
         else:
             print('NOT RUN: real Apache protected-storage success path (supply --httpd and --apache-modules)', flush=True)
 

@@ -21,6 +21,8 @@
   Diagnostics/Cron: `python3 tests/diagnostics.py --php .cache/test-runtime/install/bin/php`.
   Its HTTP fixture permits only the exact local cron URL, blocks all other
   network/mail, and must never enter a distribution. HTTP 200 is not Cron proof.
+  Full snapshots: `python3 tests/site_backup.py --php .cache/test-runtime/install/bin/php`.
+  Its fsync interruption fixture must remain outside every distribution.
   `python3 tools/prepare_test_runtime.py` builds that isolated PHP when needed;
   it must not modify or install a system PHP.
 - Never remove environment safeguards to make tests pass. Tests must use real

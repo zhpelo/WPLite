@@ -32,8 +32,12 @@ final class Maintenance
         return $handle;
     }
 
-    public static function acquire(string $data, bool $resume = false, float $timeout = 30): self
+    public static function acquire(string $data, bool $resume = false, float $timeout = 30,
+                                   string $type = 'database-restore'): self
     {
+        if (!in_array($type, ['database-restore', 'site-backup'], true)) {
+            throw new \RuntimeException('Unsupported maintenance operation type.');
+        }
         $lease = new self($data);
         $lease->operation = fopen($data . '/.operations.lock', 'c');
         if ($lease->operation === false || !flock($lease->operation, LOCK_EX | LOCK_NB)) {
@@ -42,14 +46,14 @@ final class Maintenance
         $marker = $data . '/maintenance.json';
         if ($resume) {
             $lease->journal = self::status($data);
-            if (($lease->journal['type'] ?? '') !== 'database-restore') {
-                throw new \RuntimeException('There is no interrupted database restore to resume.');
+            if (($lease->journal['type'] ?? '') !== $type) {
+                throw new \RuntimeException('There is no interrupted matching maintenance operation to resume.');
             }
         } else {
             if (file_exists($marker) || is_link($marker)) {
                 throw new \RuntimeException('Maintenance is already active. Inspect restore-status before continuing.');
             }
-            $lease->journal = ['format' => 1, 'type' => 'database-restore',
+            $lease->journal = ['format' => 1, 'type' => $type,
                 'operation_id' => bin2hex(random_bytes(12)), 'phase' => 'draining', 'started_at' => gmdate('c')];
             $lease->record('draining');
         }

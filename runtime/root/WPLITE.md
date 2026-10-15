@@ -132,8 +132,9 @@ reside inside the same HTTP-denied data tree; arbitrary public directories remai
 forbidden. Independent database recovery supports that verified storage mode.
 
 These are **database-only** backups: they do not contain uploads, plugins,
-themes, wp-config.php or the backup authentication key. Full-site backups and
-the authenticated Web recovery UI are still pending. The recovery commands
+themes, wp-config.php or the backup authentication key. Full-site snapshot
+creation is separate (below); full-site replacement recovery and the
+authenticated Web recovery UI are still pending. The database recovery commands
 require this build's site metadata and the exact matching WPLite release; they
 do not import arbitrary MySQL dumps or migrate earlier development installs.
 
@@ -158,3 +159,33 @@ repair the matching system files and explicitly accept the already-restored
 snapshot using `restore-complete --data-dir /private/site`; health checks still
 must pass. These commands do not automatically rewind a site after it has
 reopened and accepted new orders.
+
+## Full site snapshots (development CLI, not full-site restore)
+
+```sh
+php wplite/cli.php site-backup-create --data-dir /private/site
+php wplite/cli.php site-backup-verify --data-dir /private/site --backup-dir /private/site/backups/site-BACKUP-ID
+```
+
+These independent commands never bootstrap WordPress or execute saved plugin or
+theme PHP. Creation drains requests, snapshots SQLite and streams the entire site
+tree into private files, including uploads, configuration, plugins/themes,
+dotfiles and empty directories. Only the bound data tree is excluded, avoiding
+recursive backups and copies of live database/WAL files. External filesystem or
+direct database writers must be stopped first. Links, special files and changes
+outside the drained request protocol reject the snapshot. Current limits are
+50,000 entries, 64 path components and a 16 MiB manifest.
+
+Snapshots contain configuration salts and application secrets and are **not
+encrypted**. Keep them private and use encrypted off-site storage. The backup key
+is deliberately excluded; independently retain the original private site.json
+in a protected recovery vault. Never authenticate a backup using a key supplied
+by that same backup. These snapshots are not public distribution ZIPs.
+
+An owner killed during copying leaves traffic at HTTP 503 and an incomplete snapshot.
+After inspecting the cause, `site-backup-complete --data-dir /private/site`
+checks the unchanged database/runtime and closes only a site-backup maintenance
+window. It does not restore files or resume copying. Do not use database restore
+commands on a kind=site snapshot: full-site replacement, independent Web recovery
+and migration are not yet implemented. Details:
+https://github.com/zhpelo/WPLite/blob/main/docs/backups.md

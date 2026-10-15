@@ -128,6 +128,7 @@ jobs:
           python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
           python3 tests/web_install.py --php .cache/test-runtime/install/bin/php --httpd /usr/sbin/apache2 --apache-modules /usr/lib/apache2/modules
           python3 tests/diagnostics.py --php .cache/test-runtime/install/bin/php
+          python3 tests/site_backup.py --php .cache/test-runtime/install/bin/php
           python3 tools/wplite.py build
       - name: Record rebase comparison
         if: needs.discover.outputs.ready == 'true'
