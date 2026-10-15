@@ -86,9 +86,12 @@ backups/rollback 前缀，不仅是相似后缀的随机文件。
 备份及独立恢复、拒绝规则篡改后的 HTTP 503；不修改或启动系统 Apache 服务。
 已有完整 SQLite 内容/事务/HTTP/备份/恢复 smoke 套件也再次通过。
 
-两条工作流已加入 Web/Apache 测试并固定 Ubuntu 24.04；本轮远程执行结果需要单独
-确认，不能把前面的历史 CI 当作 Web 安装器远程验证证据。当前集成 SHA 以依赖锁
-为准，最新 ZIP 校验值以 dist 内生成的 .sha256 文件为准。
+两条工作流已加入 Web/Apache 测试并固定 Ubuntu 24.04。
+[Validate WPLite #38722940473](https://github.com/zhpelo/WPLite/actions/runs/38722940473)
+在工具提交 `564d72d7a1aad044634b1fac6a1c5789f5b50bd4` 上全部通过，包括 26 项
+工具测试、原 SQLite smoke、真实 Web/Apache 安装及开发 ZIP 上传。首轮 CI 发现
+新增测试缺少局部 Git 作者身份；已修复，并在本地屏蔽全局 Git 配置后再次通过。
+当前集成 SHA 以依赖锁为准，最新 ZIP 校验值以 dist 内生成的 .sha256 文件为准。
 
 本轮本地集成提交为 `24f6029ad44d18375d9ffe21acca8deaaff032aa`，发行文件数
 5070，ZIP SHA-256 为
