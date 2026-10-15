@@ -223,7 +223,8 @@ class IntegrationTest(unittest.TestCase):
         candidate = Path(result['candidate'])
         (candidate / 'wplite/setup-key.php').write_text('private setup material')
         w.git(candidate, 'add', '--', 'wplite/setup-key.php')
-        w.git(candidate, 'commit', '-m', 'Accidental site credentials')
+        w.git(candidate, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+              'commit', '-m', 'Accidental site credentials')
         lock = w.load_lock(self.lock_path)
         lock['integration']['commit'] = w.git(candidate, 'rev-parse', 'HEAD')
         with self.assertRaisesRegex(w.Error, 'must never enter a distribution'):
