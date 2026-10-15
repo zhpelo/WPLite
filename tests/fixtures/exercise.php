@@ -20,6 +20,7 @@ check(get_option('wplite_test_value') === ['中文' => '😀'], 'Serialized opti
 
 global $wpdb;
 $table = $wpdb->prefix . 'wplite_test';
+$wpdb->query("DROP TABLE IF EXISTS {$table}"); // Fixture-owned table, repeat on upgraded core.
 dbDelta("CREATE TABLE {$table} (
  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
  label varchar(191) NOT NULL,
@@ -38,6 +39,13 @@ check($pdo->query('PRAGMA integrity_check')->fetchColumn() === 'ok', 'SQLite int
 check(strtolower($pdo->query('PRAGMA journal_mode')->fetchColumn()) === 'wal', 'WAL not enabled');
 check((int) $pdo->query('PRAGMA synchronous')->fetchColumn() === 2, 'FULL not enabled');
 check((int) $pdo->query('PRAGMA busy_timeout')->fetchColumn() === 5000, 'Lock wait not configured');
-check(is_wp_error(apply_filters('upgrader_pre_install', true, ['type' => 'core'])), 'Direct core update not blocked');
+check(apply_filters('upgrader_pre_install', true, ['type' => 'core']) === true, 'Core update unexpectedly blocked');
 check(apply_filters('upgrader_pre_install', true, ['type' => 'plugin']) === true, 'Plugin update unexpectedly blocked');
+check(apply_filters('upgrader_pre_install', true, ['type' => 'theme']) === true, 'Theme update unexpectedly blocked');
+foreach (['allow_minor_auto_core_updates', 'allow_major_auto_core_updates', 'auto_update_core'] as $filter) {
+    check(apply_filters($filter, true) === true, 'WPLite must not disable core auto-updates');
+}
+$information = apply_filters('debug_information', []);
+check(($information['wplite']['fields']['version']['value'] ?? '') === '0.2.0-dev', 'MU Site Health hook missing');
+check(!str_contains(json_encode($information['wplite']), DB_PATH), 'Site Health leaked a private database path');
 echo json_encode(['status' => 'ok', 'post_id' => $id, 'sqlite' => $pdo->query('SELECT sqlite_version()')->fetchColumn()], JSON_THROW_ON_ERROR) . PHP_EOL;

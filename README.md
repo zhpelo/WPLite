@@ -1,91 +1,77 @@
 # WPLite
 
-默认使用 SQLite、跟随 WordPress 官方稳定标签的轻量发行版。
+精简的 WordPress SQLite 集成包：**官方 WordPress 不改核心，数据库使用 SQLite。**
 
-当前是开发阶段，尚未认证用于生产商店。首版保留标准 PHP 部署方式，不依赖
-ePHPm、MySQL 或 Redis。产品采用 GPL-2.0-or-later；发行包保留 WordPress 及
-SQLite 驱动各自的许可和版权信息。
+WPLite 不是 WordPress fork，不维护核心集成分支，不 rebase 官方源码，不发布整站
+安装包。WordPress 核心、插件和主题继续使用其原有更新机制。
 
-## 开发与构建
+## 组成
 
-需要 Git、Python 3.10+；PHP 检查需要 PHP 8.3–8.5。工具不依赖第三方 Python 包。
+- `wp-content/db.php`：WordPress 数据库 drop-in，加载社区 SQLite 适配器。
+- `wp-content/mu-plugins/wplite.php`：小型 MU 插件，只添加站点健康信息。
+- `wp-content/mu-plugins/wplite/`：薄启动检查和固定版本的上游驱动。
+- `tools/install.php`：一次性本地 CLI 配置工具，仅支持全新站点。
+
+不自研 SQL 翻译器，不包含备份恢复、维护锁、Web 安装器、整包升级器、常驻服务
+或 ePHPm。SQLite SQL 兼容能力来自
+[WordPress 社区 SQLite 集成](https://github.com/WordPress/sqlite-database-integration)。
+
+## 全新站点安装
+
+要求 PHP 8.3–8.5、PDO SQLite、本地可写磁盘。SQLite 需要 3.51.3+（排除
+3.52.0），或已修复的 3.44.6/3.50.7。数据库必须在真实 Web 根目录之外；不支持
+网络共享磁盘、多站点或现有 MySQL 数据迁移。PHP 进程须能读取配置、写入私有数据。
+
+1. 从 [WordPress 官网](https://wordpress.org/download/) 安装**尚未配置**的官方文件。
+2. 在本仓库准备插件依赖（只下载校验过的 SQLite 驱动，不下载核心）：
+
+   ```sh
+   python3 tools/wplite.py prepare --output .cache/wplite-plugin
+   ```
+
+3. 用满足要求的 PHP 执行配置；替换以下三个路径。私有目录的父目录必须存在，目标
+   `example-sqlite` 必须不存在。Web 根目录必须是服务器真实公开目录，不能随意填小。
+
+   ```sh
+   php tools/install.php --package .cache/wplite-plugin \
+     --wordpress-root /srv/www/example \
+     --public-root /srv/www \
+     --data-dir /srv/private/example-sqlite
+   ```
+
+4. 打开站点的 `/wp-admin/install.php`，使用 **WordPress 自带安装页面**完成安装。
+
+配置工具只新增 WPLite 文件、空 SQLite 数据库和标准 `wp-config.php`，不修改官方
+核心文件。已有配置、drop-in、WPLite 目录或数据目录时一律拒绝覆盖。失败的首次
+配置可能保留新建文件，须由所有者检查后处理，不会自动删除。详见 [安装说明](docs/install.md)。
+
+## 更新与边界
+
+- WordPress 自行更新；WPLite 不拦截核心、插件或主题更新。
+- MU 插件没有普通插件的标准更新通知/自动更新流程。WPLite 及驱动需明确部署
+  更新，当前没有自建自动更新器；不要只删除 MU 目录或 db.php 来切换数据库。
+- “符合插件接口”不等于所有未来核心或第三方插件都兼容。CI 只读验证最新稳定版，
+  不生成同步分支、自动 PR 或整站发行包。
+- 备份由站点所有者另行安排，必须使用支持 SQLite 一致性快照的流程；不要在站点
+  写入时只复制主数据库文件而忽略 WAL。当前不提供备份、恢复或迁移命令。
+- 默认 WAL、FULL、5 秒锁等待；不重试整个业务请求。不承诺任意并发写入能力、
+  WooCommerce 全兼容或固定资源节省百分比。
+- 旧 WPLite 整站开发包与本版本不是同一安装方式，**不提供自动原地转换**。旧
+  `dist/` 安装包不是当前交付物，不要与新插件混用。
+
+## 开发验证
 
 ```sh
 python3 -m unittest discover -s tests -v
-php tests/environment.php
-python3 tools/wplite.py check
-python3 tools/wplite.py sync
-python3 tools/wplite.py verify
-python3 tools/wplite.py build
-```
-
-`check` 只查询正式标签。首次 `sync` 创建以锁定官方标签为底的集成候选；有新维护
-版本时在候选分支上执行 `rebase --onto 新基线 旧基线`，不切换或改写 `main`。
-冲突保留在 `.cache/candidates/` 中，锁文件保持原样。跨发布系列需要明确指定：
-
-```sh
-python3 tools/wplite.py sync --tag 7.2 --approve-series
-```
-
-该命令仅在官方实际存在对应稳定标签时才会执行，示例不代表当前版本。
-初始基线为 WordPress **7.1.3**、SQLite Database Integration **3.1.0**，完整
-提交 SHA 和驱动 ZIP 校验值见 [依赖锁](upstream.lock.json)。开发分支、Beta、RC
-和 nightly 均不参与同步或构建。
-
-SQLite 驱动独立跟踪社区正式发行。没有核心更新时，新驱动也能生成候选；ZIP
-摘要和标签 SHA 共同固定，同标签替换、草稿、预发行及降级均会被拒绝。
-
-产物位于 `dist/`，包含固定文件时间与顺序的 ZIP、SHA-256 校验文件和依赖清单。
-构建只读取已锁定的集成提交；本地未提交的源码不会悄悄进入安装包。修改发行组件
-后需运行 `python3 tools/wplite.py sync --refresh-overlay` 创建并验证新的集成候选，
-再提交更新后的依赖锁。
-
-## 安装验证
-
-当前具备 CLI 和所有者密钥认证的 Web 安装原型，支持私有目录与经过真实 HTTP
-拒绝验证的公开目录存储。见 [Web 安装与保护](docs/web-install.md) 和
-[发行包安装说明](runtime/root/WPLITE.md)。不得直接升级线上 WordPress
-或将本构建用于真实交易。
-
-已增加 CLI 数据库备份、校验和恢复，支持停写排空、失败后的独立回退及重新开放。
-另提供不加载 WordPress 的全站快照创建/独立校验，覆盖媒体、配置、插件与主题；
-先排空请求，流式复制并校验完整文件树。全站替换恢复和 Web 恢复界面仍未完成，
-不能把快照校验当作完整恢复演练。详见 [备份与恢复](docs/backups.md)。
-
-若本机 PHP 缺少 PDO SQLite，可选择编译隔离的测试运行时：
-
-```sh
 python3 tools/prepare_test_runtime.py
-.cache/test-runtime/install/bin/php tests/environment.php
+.cache/test-runtime/install/bin/php -n tests/environment.php
+python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
 ```
 
-该命令只写 `.cache/test-runtime/`，需要 C 编译器和 make，不安装系统软件，不修改
-已有 PHP 配置，也不启动系统服务。它是最小化测试用 PHP，不是生产 PHP 安装器。
+兼容测试临时下载并按官网校验值核对 WordPress，从稳定基线安装，再使用官方
+`Core_Upgrader` 升级到当前稳定版，执行 `wp_upgrade()` 并验证 SQLite 内容、SQL、
+HTTP、登录和更新接口。外部 HTTP/邮件在测试站内阻断，核心更新包预先下载校验；
+不测试公网下载传输或证明无人值守调度。测试核心不会被纳入插件包。
 
-## 项目文档
-
-- [架构与同步约定](docs/architecture.md)
-- [交付路线与完成证据](docs/roadmap.md)
-- [上游同步操作](docs/upstream-sync.md)
-- [Web 安装与数据目录保护](docs/web-install.md)
-- [运行诊断与 Cron 执行证据](docs/diagnostics.md)
-- [本地与 GitHub 验证记录及尚未验证的范围](docs/verification.md)
-
-## 启用 GitHub 工作流
-
-`.github/workflows/ci.yml` 负责工具测试、真实 SQLite 安装验证与开发包构建。
-`upstream-sync.yml` 每 6 小时检查正式标签，验证候选后创建草稿同步 PR，并去重及
-关闭已被更高版本取代的自动候选。跨发布系列只通过手动触发并明确批准。
-
-main 的系统文件和验证代码变更也会触发检查。候选去重会核验实际 Git 来源及
-系统/验证指纹，不只比较版本号；人工接手或来源不明的 PR 不会自动关闭。
-CI 使用 `verify --overlay` 拒绝依赖锁仍指向旧系统文件的构建。
-
-先将工具 main 和锁中记录的集成分支推送到项目自己的 GitHub 仓库，再在仓库
-Settings → Actions 中允许 GitHub Actions 创建 PR。fork 仓库还需主动启用定时
-工作流。GitHub Actions 的调度可能延迟，因此同时提供 workflow_dispatch。
-工作流文件存在不代表远程定时任务已启用；绑定 origin 和实际运行结果需另行确认。
-
-本仓库 `zhpelo/WPLite` 已启用两条工作流，首次 Ubuntu CI 和手动稳定标签同步
-均已通过。当前上游无更新，因此未创建同步 PR；具体证据和边界见
-[验证记录](docs/verification.md)。
+当前证据与未验证范围见 [验证记录](docs/verification.md)，设计见
+[架构](docs/architecture.md) 与 [范围](docs/roadmap.md)。

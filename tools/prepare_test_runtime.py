@@ -2,7 +2,8 @@
 """Build an isolated test-only PHP CLI and patched SQLite under .cache.
 
 Does not install packages, change PATH, modify a system PHP, or start a service.
-Requires a C compiler and make. This minimal PHP has no MySQL extensions.
+Requires a C compiler, make and zlib development headers. This minimal PHP has
+no MySQL extensions. Zlib is needed by WordPress's native ZIP core updater.
 """
 
 import hashlib
@@ -64,7 +65,8 @@ def main():
     directory.mkdir(parents=True, exist_ok=True)
     prefix = directory / "install"
     php = prefix / "bin" / "php"
-    if php.is_file():
+    if php.is_file() and subprocess.run([str(php), '-n', '-r',
+            'exit(function_exists("gzinflate") ? 0 : 1);'], capture_output=True).returncode == 0:
         print(php)
         return
     env = os.environ.copy()
@@ -76,11 +78,12 @@ def main():
     php_source = source("php", directory)
     env.update(SQLITE_CFLAGS="-I" + str(prefix / "include"),
                SQLITE_LIBS="-L" + str(prefix / "lib") + " -lsqlite3 -lm",
+               ZLIB_CFLAGS=" ", ZLIB_LIBS="-lz",
                PKG_CONFIG="/usr/bin/false")
     run(["./configure", "--prefix=" + str(prefix), "--disable-all", "--enable-cli",
          "--disable-cgi", "--disable-phpdbg", "--without-pear", "--enable-pdo",
          "--with-pdo-sqlite", "--with-sqlite3", "--enable-session", "--enable-filter",
-         "--enable-ctype", "--enable-tokenizer", "--enable-fileinfo", "--enable-bcmath"],
+         "--enable-ctype", "--enable-tokenizer", "--enable-fileinfo", "--enable-bcmath", "--with-zlib"],
         php_source, env, log)
     run(["make", "-j4"], php_source, env, log)
     run(["make", "install"], php_source, env, log)

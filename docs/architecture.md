@@ -1,41 +1,41 @@
-# WPLite 架构约定
+# 精简架构
 
-## 首版边界
+## 不变约束
 
-传统 PHP 安装包；SQLite 是唯一支持的数据库；优先内容站，验证 WooCommerce
-核心业务流程。真实支付网关逐个认证。尽量兼容虚拟主机，但不绕过存储保护、
-文件锁、PHP 扩展和 SQLite 修复版本要求。单站点、单主机、全新安装。
+WPLite 是 SQLite 集成包，不是 WordPress 发行版。官方核心零修改，不包含核心
+源码、核心版本锁、rebase 工具、同步 PR、整站构建或核心更新拦截。
 
-运行链路：WordPress/插件/主题 → `$wpdb` → 社区 MySQL 兼容层 → PDO SQLite。
-保留原有插件、主题、Hooks、REST API、表名和数据模型，不自行重写 SQL 解析器。
+调用链：标准 `wp-config.php` → 薄 bootstrap → 官方 `wp-settings.php` →
+`wp-content/db.php` → 社区 SQLite 驱动 → PDO SQLite；随后官方加载 MU 插件。
+所有数据库查询仍经 `$wpdb` 与上游适配器，不重写 SQL 解析器。
 
-## 系统组件
+## 运行部分
 
-- `wp-config.php` 在加载 WordPress 前引入 WPLite bootstrap，验证 SQLite 环境、
-  必需 drop-in 和站点身份；数据库遗失后停止启动，不自动创建空站。
-- `wp-content/db.php` 在数据库初始化时加载固定版本的系统驱动。
-- MU 插件提供后台诊断及更新约束；系统驱动不进入普通插件停用/卸载流程。
-- 默认 WAL、FULL、5 秒锁等待、1000 页自动 checkpoint。不重试整个业务请求。
-- 数据及备份优先放在公开根目录之外；Web 安装器可使用经过真实 HTTP 拒绝验证的
-  公开目录内受保护存储。网络共享磁盘不在支持范围内。
-- 根目录 wp-config.php 是不可变入口，站点专属配置位于 wplite/site-config.php；
-  未配置时只能转到所有者密钥认证的 SQLite 安装器，不进入 MySQL 向导。
+- bootstrap 在数据库初始化前检查 PHP/SQLite、已存在的私有数据库及必需文件。
+  缺失数据库不能静默重建；缺失 db.php 不能回退到 MySQL。它不是完整的文件
+  篡改防护、发行签名或全文件完整性系统。
+- db.php 是 WordPress 正式支持的 drop-in，不是核心补丁。固定驱动的 WAL/FULL、
+  busy_timeout=5000、wal_autocheckpoint=1000。持久性优先，不声称极限写入性能。
+- MU 插件只注册懒执行的 Site Health 信息，不注册定时任务、后台恢复界面、
+  维护请求锁或任何更新禁用钩子。诊断不暴露数据库路径或密钥。
+- 仅支持默认 wp-content/MU 目录布局、单站点、单主机、本地磁盘与全新安装。
+  数据库在真实 Web 根目录之外，不再增加公开目录存储探针和受限主机适配。
+- 配置工具拒绝现有站点；写入完成后，由官方安装页面完成站点初始化。
 
-## 上游与发布
+## 开发与依赖
 
-WordPress 来源唯一为 https://github.com/WordPress/WordPress.git ，只按稳定标签
-同步；SQLite 来源为 WordPress 社区驱动仓库的正式发行。依赖固定 SHA，驱动发行
-归档另校验 SHA-256。保留官方核心文件的原始字节，新增系统组件作为独立提交。
+`plugin/` 仅放自己的 drop-in/MU 源码。`dependencies.lock.json` 只固定社区 SQLite
+正式发行的 URL 和 SHA-256，不固定 WordPress。prepare 校验驱动，复制源码及原始
+驱动文件到 `.cache/plugin-*`，不混入数据库、配置、核心或测试插件。
 
-项目维护时执行 rebase；用户站点升级时安装经过验证、签名的整套发行包。两条
-流程严格区分。WordPress 自身版本字段不改写，WPLite 单独维护版本。
+核心由用户通过 WordPress 自身渠道更新。驱动和 WPLite 是独立部署依赖，MU 不会
+自动拥有普通插件更新体验。驱动升级需改依赖锁、跑测试并人工部署，不自动取最新版。
 
-## 兼容与性能门槛
+## 只读兼容性 CI
 
-兼容性精确到核心、驱动、PHP、插件、主题及业务流程。HTTP 200 和安装成功均
-不能代替功能验证。WooCommerce 要覆盖 HPOS、旧订单存储、同步开关、库存竞争、
-双用户购物车、订单状态、退款、重复支付回调和 Action Scheduler。
+push/PR/手动/每周验证，仅 contents:read。官方稳定核心是临时测试输入，不是
+仓库依赖或发行物。真实 SQLite 安装、原生核心升级、升级后数据/接口回归、核心
+字节核对和必要负面用例是当前范围。PHP 8.4 本地结果不能代表完整 PHP/主机矩阵。
 
-资源测试与合理配置的 MariaDB 对照，保持核心、插件、主题、数据、PHP 并发及
-缓存条件一致。测量总内存、CPU、P95、吞吐和锁错误率；独立/共享数据库分开报告。
-不预先承诺节省百分比。ePHPm 只作为后续运行时评测候选。
+备份恢复、Web 安装器、组合发布、签名整包升级、MySQL 迁移、多站点、电商认证、
+常驻 PHP/ePHPm 均不在本次交付内。维护工具的历史实现在 Git 历史中保留。

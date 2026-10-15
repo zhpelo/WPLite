@@ -1,4 +1,4 @@
-name: Validate WPLite
+name: SQLite compatibility
 
 on:
   push:
@@ -6,52 +6,32 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # Test the latest official stable core; never sync, commit or publish it.
+    - cron: '23 3 * * 1'
 
 permissions:
   contents: read
 
+concurrency:
+  group: sqlite-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  tooling:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - name: Test stable-tag selection, rebase safety and deterministic packaging
-        run: python3 -m unittest discover -s tests -v
-      - name: Reject unpinned or altered dependencies
-        env:
-          WPLITE_GITHUB_API_TOKEN: ${{ github.token }}
-        run: python3 tools/wplite.py check
-  sqlite-install:
+  compatibility:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Verify locked integration
-        run: python3 tools/wplite.py verify --overlay
-      - name: Prepare isolated PHP without MySQL extensions
+      - name: Prepare isolated patched PHP and SQLite without MySQL extensions
         run: python3 tools/prepare_test_runtime.py
-      - name: Test SQLite environment policy
-        run: .cache/test-runtime/install/bin/php tests/environment.php
-      - name: Verify genuine SQLite installation and HTTP requests
-        run: python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
-      - name: Verify owner-authorized Web installation and real Apache storage protection
+      - name: Test integration package and setup boundaries
+        run: python3 -m unittest discover -s tests -v
+      - name: Check SQLite environment policy
+        run: .cache/test-runtime/install/bin/php -n tests/environment.php
+      - name: Test official installation, native core upgrade, SQLite and HTTP
         run: >-
-          python3 tests/web_install.py --php .cache/test-runtime/install/bin/php
-          --httpd /usr/sbin/apache2 --apache-modules /usr/lib/apache2/modules
-      - name: Verify independent diagnostics, authorization and real Cron execution
-        run: python3 tests/diagnostics.py --php .cache/test-runtime/install/bin/php
-      - name: Verify drained full site backup, independent integrity and interrupted-owner safety
-        run: python3 tests/site_backup.py --php .cache/test-runtime/install/bin/php
-      - name: Build installable ZIP
-        run: python3 tools/wplite.py build
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: wplite-development-build
-          path: dist/
-          if-no-files-found: error
-          retention-days: 14
+          python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
+          --from-version 7.1.2 --to-version latest

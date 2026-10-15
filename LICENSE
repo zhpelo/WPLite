@@ -11,6 +11,7 @@ WPLite is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-The full license text is included as license.txt in the WordPress-derived
-distribution and is available at https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
-Upstream WordPress and SQLite driver copyright and license notices are retained.
+The full license text is available at
+https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
+The prepared integration retains the upstream SQLite driver's LICENSE and
+copyright notices. WordPress itself is not included in this package.
