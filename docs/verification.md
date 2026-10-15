@@ -1,4 +1,4 @@
-# 本地验证记录
+# 验证记录
 
 日期：2026-10-15。平台：macOS arm64。
 
@@ -43,10 +43,33 @@ SHA-256：`158eb5583e9b74bc4654acbf32ad907f904606cdc8e535ea6d4fa5df3b5a8da0`
 打包文件数：5064。与固定官方基线中所有文件逐字节比对，未修改或删除核心文件。
 两个 GitHub Actions YAML 已完成本地语法解析。
 
+## GitHub 实际运行
+
+项目远程仓库为 [zhpelo/WPLite](https://github.com/zhpelo/WPLite)，已推送工具
+main 和锁定集成分支 `sync/wp-7.1.3-1u6m8mop`。被验证的工具提交为
+`e159ed6f157324ec21c5b06c7ac6ffdea1431e24`。
+
+- [Validate WPLite #38718827624](https://github.com/zhpelo/WPLite/actions/runs/38718827624)：成功。
+  Ubuntu runner 上的 22 项工具测试、正式依赖检查、隔离 PHP 8.4 编译、核心
+  一致性验证、真实 SQLite 安装/HTTP/备份恢复测试及开发 ZIP 上传全部通过。
+- [Sync official stable tags #38718951634](https://github.com/zhpelo/WPLite/actions/runs/38718951634)：成功。
+  手动运行确认核心和驱动均为 `up-to-date`，没有创建无更新的 PR。
+- 两条工作流均为 active；同步计划为 UTC `17 */6 * * *`。已按维护者授权允许
+  Actions 创建 PR，仓库默认 token 权限仍为 read。同步仅创建草稿，不自动批准、
+  合并或发布。
+
+Ubuntu CI 日志中的发行 ZIP SHA-256 与上面的 macOS 本地构建完全一致。CI
+产物名称为 `wplite-development-build`，由上传工作流保留 14 天；GitHub artifact
+外层归档的摘要不是内层发行 ZIP 的摘要，不应混用。
+
+目前没有新上游版本，尚未实际运行新版本候选的远程 rebase、PR 创建、去重和
+取代路径；这些路径有本地真实 Git 测试及发布策略测试，不能当作远程运行证据。
+定时计划已启用，但首次 cron 触发记录尚未观察到。
+
 ## 证据边界
 
-这是 M1 开发构建验证，不是生产认证。尚无真实 GitHub Actions 运行/PR 记录，
+这是 M1 开发构建验证，不是生产认证。尚无实际同步 PR 记录，
 也未完成 PHP 8.3/8.5、Apache/Nginx、受限虚拟主机、WooCommerce/插件组合、
 资源基准、签名升级、全站备份/Web 恢复、磁盘满/权限错误及升级中断演练。
-相同 ZIP 校验值在本地同一构建工具链
-上得到验证，尚未证明不同 Python/zlib 工具链之间也字节一致。
+相同 ZIP 校验值已在本地重复构建及本次 Ubuntu CI 中得到验证；不代表任意
+Python/zlib 工具链之间均保证字节一致。

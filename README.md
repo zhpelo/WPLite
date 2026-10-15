@@ -65,7 +65,7 @@ python3 tools/prepare_test_runtime.py
 - [架构与同步约定](docs/architecture.md)
 - [交付路线与完成证据](docs/roadmap.md)
 - [上游同步操作](docs/upstream-sync.md)
-- [本地验证记录与尚未验证的范围](docs/verification.md)
+- [本地与 GitHub 验证记录及尚未验证的范围](docs/verification.md)
 
 ## 启用 GitHub 工作流
 
@@ -77,3 +77,7 @@ python3 tools/prepare_test_runtime.py
 Settings → Actions 中允许 GitHub Actions 创建 PR。fork 仓库还需主动启用定时
 工作流。GitHub Actions 的调度可能延迟，因此同时提供 workflow_dispatch。
 工作流文件存在不代表远程定时任务已启用；绑定 origin 和实际运行结果需另行确认。
+
+本仓库 `zhpelo/WPLite` 已启用两条工作流，首次 Ubuntu CI 和手动稳定标签同步
+均已通过。当前上游无更新，因此未创建同步 PR；具体证据和边界见
+[验证记录](docs/verification.md)。
