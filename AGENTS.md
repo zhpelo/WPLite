@@ -1,31 +1,22 @@
 # WPLite development instructions
 
-- WPLite is a SQLite integration package, NOT a WordPress fork/distribution.
-  Read `docs/architecture.md` and `docs/roadmap.md` before changing scope.
-- Never modify, vendor, rebase or publish WordPress core. No integration branches,
-  core locks, upstream synchronization PRs, combined releases or core update blocks.
-- Runtime source is `plugin/wp-content/db.php` and
-  `plugin/wp-content/mu-plugins/`. Keep MU callbacks minimal and diagnostics lazy.
-- Use the pinned official SQLite release in `dependencies.lock.json`; verify its
-  SHA-256 before preparing dependencies. Never write our own SQL translator.
-- `python3 tools/wplite.py prepare` assembles only the integration under `.cache/`.
-  Never include site configuration, databases, test fixtures or WordPress core.
-- `tools/install.php` is a local NEW-site setup helper, not a migration/updater.
-  It must refuse existing configs, drop-ins, private data and legacy WPLite sites.
-  Database storage must be outside the actual public root; do not add public-root
-  storage probes, Web installers, backups, recovery or maintenance state machines.
-- Keep WordPress core/plugin/theme update mechanisms unchanged. MU plugins still
-  need explicit deployment updates; do not claim native MU automatic updates.
-- Tests: `python3 -m unittest discover -s tests -v`,
-  `.cache/test-runtime/install/bin/php -n tests/environment.php`, and
-  `python3 tests/smoke.py --php .cache/test-runtime/install/bin/php`.
-  `tools/prepare_test_runtime.py` prepares isolated patched PHP/SQLite if needed;
-  never replace system PHP or reconfigure/start system services.
-- CI only validates tooling and stable WordPress compatibility with read-only
-  permissions. No auto PRs, repository writes or full-site build artifacts.
-- Integration tests must run real PDO SQLite without mysqli/pdo_mysql and block
-  external network/mail. Test fixtures never enter the plugin package.
-- Preserve user work and data. Legacy generated `.cache/` and `dist/` files are
-  not current deliverables; do not broadly delete them or historical Git refs.
-- Record actual tested versions; never infer universal plugin, WooCommerce,
-  hosting, future WordPress compatibility or resource savings from a smoke test.
+- The current priority is fast deployment. Keep only the upload-ready PHP
+  installation package and essential installation/security logic.
+- Do not develop tools/, checks/, tests/, test frameworks, CI platforms,
+  backup/recovery, migration, auto-updaters, or new administration features
+  without an explicit user request. The user intentionally removed tests/.
+- Never modify, vendor, rebase, sync or publish WordPress core. No combined
+  WordPress distributions, core update blocks, automated PRs or ePHPm.
+- plugin/ is deployable as uploaded. Bundle the official SQLite dependency,
+  retain its license, and verify the archive against dependencies.lock.json.
+  Do not author a SQL translator or edit upstream vendor source.
+- setup.php is only for new sites. Never overwrite site configuration,
+  drop-ins or existing data. Protect setup ownership and database downloads.
+- db-template.php is copied to wp-content/db.php during installation; its
+  paths are intentionally relative to the installed drop-in location.
+- Preserve WordPress update mechanisms. MU/driver updates require explicit
+  deployment; do not imply native automatic MU updates or universal compatibility.
+- Preserve unrelated user work and data, ignored historical artifacts and Git
+  refs. Do not replace system PHP or reconfigure/start system services.
+- Verify proportionately without creating a testing product. Record only actual
+  results and limitations; no unmeasured performance or compatibility claims.

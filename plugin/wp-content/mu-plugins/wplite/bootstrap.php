@@ -19,14 +19,19 @@ try {
     $parent = realpath(dirname(DB_PATH));
     $database = realpath(DB_PATH);
     if ($public === false || $parent === false || $database !== DB_PATH || is_link(DB_PATH)
-        || !is_file(DB_PATH) || filesize(DB_PATH) === 0
-        || \WPLite\Environment::isWithin($database, $public)) {
-        throw new RuntimeException('The existing SQLite database must be a regular file outside the public root. It will not be recreated.');
+        || !is_file(DB_PATH) || filesize(DB_PATH) === 0) {
+        throw new RuntimeException('The existing SQLite database must be a regular file. It will not be recreated.');
     }
     $served = PHP_SAPI !== 'cli' && !empty($_SERVER['DOCUMENT_ROOT'])
         ? realpath($_SERVER['DOCUMENT_ROOT']) : false;
-    if ($served !== false && $served !== '' && \WPLite\Environment::isWithin($database, $served)) {
-        throw new RuntimeException('The database is inside the active HTTP document root.');
+    if (\WPLite\Environment::isWithin($database, $public)
+        || $served !== false && $served !== '' && \WPLite\Environment::isWithin($database, $served)) {
+        $deny = $parent . '/.htaccess';
+        if (!defined('WPLITE_STORAGE_DENY_HASH') || !is_file($deny) || is_link($deny)
+            || !hash_equals(hash('sha256', "Require all denied\n"), WPLITE_STORAGE_DENY_HASH)
+            || !hash_equals(WPLITE_STORAGE_DENY_HASH, hash_file('sha256', $deny))) {
+            throw new RuntimeException('Public-root storage has no matching verified deny rule.');
+        }
     }
     $content = dirname(__DIR__, 2);
     if (!is_file($content . '/db.php') || is_link($content . '/db.php')

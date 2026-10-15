@@ -1,78 +1,42 @@
 # WPLite
 
-精简的 WordPress SQLite 集成包：**官方 WordPress 不改核心，数据库使用 SQLite。**
+不修改 WordPress 核心的 SQLite 安装包：精简 MU 插件 + 数据库 drop-in。
+SQLite 驱动已包含在 `plugin/` 中，用户无需 Python、Composer、SSH 或终端命令。
 
-WPLite 不是 WordPress fork，不维护核心集成分支，不 rebase 官方源码，不发布整站
-安装包。WordPress 核心、插件和主题继续使用其原有更新机制。
+## 安装（仅全新站点）
 
-## 组成
+1. 在主机面板上传、解压官方 WordPress，暂时不要执行其安装向导。
+2. 将本仓库 `plugin/` **里面的内容**上传到 WordPress 根目录，与 `wp-admin/`
+   同级。也可以将 WPLite 上传包直接解压到该目录；不是在后台“上传插件”。
+3. 浏览器打开 `https://你的域名/wplite-setup.php`。按页面提示，通过主机面板
+   新建所有者凭据文件，填写站点和管理员信息，提交安装。
+4. 安装完成后登录 WordPress，并通过面板删除 `wplite-setup.php` 和剩余的
+   `wplite-setup-key.php`。
 
-- `wp-content/db.php`：WordPress 数据库 drop-in，加载社区 SQLite 适配器。
-- `wp-content/mu-plugins/wplite.php`：小型 MU 插件，只添加站点健康信息。
-- `wp-content/mu-plugins/wplite/`：薄启动检查和固定版本的上游驱动。
-- `tools/install.php`：一次性本地 CLI 配置工具，仅支持全新站点。
+安装页创建 SQLite 数据库、`wp-content/db.php`、标准 `wp-config.php` 和管理员，
+不改动官方核心，不覆盖已有站点。所有者凭据用于防止陌生访客抢先安装。
+安装中途失败时停止写入，需通过主机面板检查本次新建文件，不提供自动恢复。
 
-不自研 SQL 翻译器，不包含备份恢复、维护锁、Web 安装器、整包升级器、常驻服务
-或 ePHPm。SQLite SQL 兼容能力来自
-[WordPress 社区 SQLite 集成](https://github.com/WordPress/sqlite-database-integration)。
+## 主机要求
 
-## 全新站点安装
+- Linux/POSIX、PHP 8.3–8.5、PDO SQLite、可写的本地磁盘、HTTPS。
+- SQLite 3.51.3+（排除 3.52.0），或已修复的 3.44.6 / 3.50.7。
+- 默认把数据库放在网站公开目录外；无法使用私有目录时，只在本站 HTTP 验证
+  确认服务器禁止下载数据库后才使用站内目录。Nginx 或限制本站 HTTP 请求的
+  主机可能需要由主机面板指定私有路径，不保证所有共享主机都能直接运行。
+- 站内存储依赖服务器持续禁止访问数据库及 WAL/SHM 文件。以后更改服务器配置
+  必须保留保护规则，PHP 本身不能拦截静态数据库文件下载。
 
-当前支持 Linux/macOS（POSIX 路径）、PHP 8.3–8.5、PDO SQLite、本地可写磁盘。
-SQLite 需要 3.51.3+（排除
-3.52.0），或已修复的 3.44.6/3.50.7。数据库必须在真实 Web 根目录之外；不支持
-网络共享磁盘、多站点或现有 MySQL 数据迁移。PHP 进程须能读取配置、写入私有数据。
+## 范围
 
-1. 从 [WordPress 官网](https://wordpress.org/download/) 安装**尚未配置**的官方文件。
-2. 在本仓库准备插件依赖（只下载校验过的 SQLite 驱动，不下载核心）：
+WordPress 核心、普通插件和主题沿用官方更新机制。WPLite MU 插件及驱动需要手动
+部署更新，不承诺任意插件、主题或未来核心版本都兼容。
 
-   ```sh
-   python3 tools/wplite.py prepare --output .cache/wplite-plugin
-   ```
+当前不开发 tools、checks、测试平台、核心同步、整站发行、备份恢复、MySQL 迁移、
+多站点或 ePHPm。实际驱动来自
+[WordPress SQLite Database Integration](https://github.com/WordPress/sqlite-database-integration)，
+固定版本和归档 SHA-256 记录于 `dependencies.lock.json`；上游源码及许可证原样保留。
 
-3. 用满足要求的 PHP 执行配置；替换以下三个路径。私有目录的父目录必须存在，目标
-   `example-sqlite` 必须不存在。Web 根目录必须是服务器真实公开目录，不能随意填小。
-
-   ```sh
-   php tools/install.php --package .cache/wplite-plugin \
-     --wordpress-root /srv/www/example \
-     --public-root /srv/www \
-     --data-dir /srv/private/example-sqlite
-   ```
-
-4. 打开站点的 `/wp-admin/install.php`，使用 **WordPress 自带安装页面**完成安装。
-
-配置工具只新增 WPLite 文件、空 SQLite 数据库和标准 `wp-config.php`，不修改官方
-核心文件。已有配置、drop-in、WPLite 目录或数据目录时一律拒绝覆盖。失败的首次
-配置可能保留新建文件，须由所有者检查后处理，不会自动删除。详见 [安装说明](docs/install.md)。
-
-## 更新与边界
-
-- WordPress 自行更新；WPLite 不拦截核心、插件或主题更新。
-- MU 插件没有普通插件的标准更新通知/自动更新流程。WPLite 及驱动需明确部署
-  更新，当前没有自建自动更新器；不要只删除 MU 目录或 db.php 来切换数据库。
-- “符合插件接口”不等于所有未来核心或第三方插件都兼容。CI 只读验证最新稳定版，
-  不生成同步分支、自动 PR 或整站发行包。
-- 备份由站点所有者另行安排，必须使用支持 SQLite 一致性快照的流程；不要在站点
-  写入时只复制主数据库文件而忽略 WAL。当前不提供备份、恢复或迁移命令。
-- 默认 WAL、FULL、5 秒锁等待；不重试整个业务请求。不承诺任意并发写入能力、
-  WooCommerce 全兼容或固定资源节省百分比。
-- 旧 WPLite 整站开发包与本版本不是同一安装方式，**不提供自动原地转换**。旧
-  `dist/` 安装包不是当前交付物，不要与新插件混用。
-
-## 开发验证
-
-```sh
-python3 -m unittest discover -s tests -v
-python3 tools/prepare_test_runtime.py
-.cache/test-runtime/install/bin/php -n tests/environment.php
-python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
-```
-
-兼容测试临时下载并按官网校验值核对 WordPress，从稳定基线安装，再使用官方
-`Core_Upgrader` 升级到当前稳定版，执行 `wp_upgrade()` 并验证 SQLite 内容、SQL、
-HTTP、登录和更新接口。外部 HTTP/邮件在测试站内阻断，核心更新包预先下载校验；
-不测试公网下载传输或证明无人值守调度。测试核心不会被纳入插件包。
-
-当前证据与未验证范围见 [验证记录](docs/verification.md)，设计见
-[架构](docs/architecture.md) 与 [范围](docs/roadmap.md)。
+安装页已在本地 PHP 8.4.26 / SQLite 3.53.4 验证浏览器安装和登录，包括 Apache
+站内保护场景；也验证过官方 WordPress 7.1.2 → 7.1.3 升级及数据保留。
+这些结果不代表所有共享主机或第三方插件均兼容，不预估资源节省百分比。
