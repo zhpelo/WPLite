@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 require_once __DIR__ . '/environment.php';
 
 try {
-    \WPLite\Environment::requireSupported();
+    define('SQLITE_JOURNAL_MODE', \WPLite\Environment::journalMode(\WPLite\Environment::requireSupported()));
     if (!defined('DB_ENGINE') || DB_ENGINE !== 'sqlite' || !defined('DB_PATH')
         || !is_string(DB_PATH) || !defined('WPLITE_PUBLIC_ROOT')) {
         throw new RuntimeException('Missing SQLite configuration. Use the WPLite new-site setup instructions.');
@@ -46,7 +46,7 @@ try {
         http_response_code(503);
         header('Content-Type: text/plain; charset=utf-8');
         header('Cache-Control: no-store');
-        echo 'WPLite SQLite is unavailable. Ask the site owner to check the configuration and database files.';
+        echo 'WPLite is unavailable. Ask the site owner to check the configuration and database files.';
         error_log('WPLite: ' . $error->getMessage());
     }
     exit(1);

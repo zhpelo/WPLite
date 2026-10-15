@@ -28,16 +28,12 @@ final class Setup
             throw new \RuntimeException('无法确认网站地址。');
         }
         $https = !empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off';
-        $hostname = parse_url('http://' . $host, PHP_URL_HOST);
-        if (!$https && !in_array($hostname, ['localhost', '127.0.0.1', '[::1]'], true)) {
-            throw new \RuntimeException('安装必须使用 HTTPS。请先在主机面板启用 HTTPS；不信任客户端转发头。');
-        }
         $origin = ($https ? 'https://' : 'http://') . $host;
         $script = $_SERVER['SCRIPT_NAME'] ?? '';
-        if (!str_ends_with($script, '/wplite-setup.php') || preg_match('/[\x00-\x20\\\\?#]/', $script)) {
-            throw new \RuntimeException('请直接打开上传的 wplite-setup.php。');
+        if (!str_ends_with($script, '/wp-admin/setup-config.php') || preg_match('/[\x00-\x20\\\\?#]/', $script)) {
+            throw new \RuntimeException('请通过 WordPress 官方配置入口访问。');
         }
-        return [$origin, rtrim(dirname($script), '/')];
+        return [$origin, substr($script, 0, -strlen('/wp-admin/setup-config.php'))];
     }
 
     private static function get(string $url): array
@@ -61,7 +57,7 @@ final class Setup
         self::fresh($data . '/.htaccess', self::DENY);
         $token = bin2hex(random_bytes(24));
         $control = 'wplite-probe-' . bin2hex(random_bytes(8)) . '.txt';
-        $paths = ['site.sqlite', 'site.sqlite-wal', 'site.sqlite-shm', '.ht.sqlite.lock', '.ht.sqlite.maintenance'];
+        $paths = ['site.sqlite', 'site.sqlite-journal', 'site.sqlite-wal', 'site.sqlite-shm', '.ht.sqlite.lock', '.ht.sqlite.maintenance'];
         $created = [];
         try {
             self::fresh($root . '/' . $control, $token, 0644);
@@ -84,7 +80,7 @@ final class Setup
         }
     }
 
-    public static function prepare(string $root, array $input, string $url): string
+    public static function prepare(string $root, array $input, string $url): void
     {
         Environment::requireSupported();
         $public = @realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
@@ -92,22 +88,18 @@ final class Setup
             || !is_file($root . '/wp-settings.php') || !is_dir($root . '/wp-admin')) {
             throw new \RuntimeException('无法确认官方 WordPress 目录及真实 Web 根目录；未修改核心文件。');
         }
-        foreach ([$root . '/wp-config.php', dirname($root) . '/wp-config.php', $root . '/wplite', $root . '/wp-content/db.php'] as $existing) {
+        foreach ([$root . '/wp-config.php', dirname($root) . '/wp-config.php', $root . '/wplite'] as $existing) {
             if (@file_exists($existing) || @is_link($existing)) { throw new \RuntimeException('仅支持全新站点：已有配置或数据库 drop-in，不会覆盖。'); }
         }
-        if (!is_file(__DIR__ . '/vendor/sqlite/wp-includes/sqlite/db.php') || !is_file(__DIR__ . '/db-template.php')) {
+        $dropin = $root . '/wp-content/db.php';
+        if (!is_file(__DIR__ . '/vendor/sqlite/wp-includes/sqlite/db.php') || !is_file($dropin) || is_link($dropin)
+            || !str_contains((string) file_get_contents($dropin), 'WPLITE_SQLITE_DROPIN_V3')) {
             throw new \RuntimeException('安装文件不完整。请上传已包含 SQLite 驱动的完整安装包，无需运行 Python 或服务器下载。');
         }
-        $title = $input['title'] ?? '';
-        $user = $input['admin-user'] ?? '';
-        $email = $input['admin-email'] ?? '';
-        $password = $input['admin-password'] ?? '';
         $mode = $input['storage'] ?? 'auto';
         $requested = trim($input['data-dir'] ?? '');
-        if ($title === '' || strlen($title) > 200 || !preg_match('/^[a-zA-Z0-9_.@-]{1,60}$/D', $user)
-            || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 254
-            || strlen($password) < 12 || strlen($password) > 200 || !in_array($mode, ['auto', 'private', 'protected'], true)) {
-            throw new \RuntimeException('请填写站点标题、有效管理员账号/邮箱，以及至少 12 字节的管理员密码。');
+        if (!in_array($mode, ['auto', 'private', 'protected'], true)) {
+            throw new \RuntimeException('请选择有效的数据库存储方式。');
         }
         $parent = @realpath(dirname($public));
         if ($requested !== '') {
@@ -142,7 +134,6 @@ final class Setup
             $pdo = null;
             if (!chmod($data . '/site.sqlite', 0600)) { throw new \RuntimeException('无法保护数据库文件权限。'); }
         } finally { umask($oldMask); }
-        self::fresh($root . '/wp-content/db.php', (string) file_get_contents(__DIR__ . '/db-template.php'), 0644);
         $constants = ['DB_ENGINE' => 'sqlite', 'DB_PATH' => $data . '/site.sqlite', 'DB_NAME' => 'wplite',
             'DB_USER' => '', 'DB_PASSWORD' => '', 'DB_HOST' => '', 'DB_CHARSET' => 'utf8mb4',
             'DB_COLLATE' => '', 'WPLITE_PUBLIC_ROOT' => $public];
@@ -150,13 +141,72 @@ final class Setup
         foreach (['AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY', 'AUTH_SALT', 'SECURE_AUTH_SALT', 'LOGGED_IN_SALT', 'NONCE_SALT'] as $name) {
             $constants[$name] = bin2hex(random_bytes(32));
         }
-        $config = "<?php\n// WPLite SQLite; WordPress core is unmodified.\n";
+        $config = "<?php\n// WPLite; WordPress core is unmodified.\n";
         foreach ($constants as $name => $value) {
-            define($name, $value);
             $config .= 'define(' . var_export($name, true) . ', ' . var_export($value, true) . ");\n";
         }
         $config .= "\$table_prefix = 'wp_';\nif (!defined('ABSPATH')) { define('ABSPATH', __DIR__ . '/'); }\n";
         $config .= "require_once ABSPATH . 'wp-content/mu-plugins/wplite/bootstrap.php';\nrequire_once ABSPATH . 'wp-settings.php';\n";
-        return $config;
+        self::fresh($root . '/wp-config.php', $config);
+    }
+
+    public static function render(): void
+    {
+        header('Cache-Control: no-store');
+        header('Content-Type: text/html; charset=utf-8');
+        header('X-Content-Type-Options: nosniff');
+        header('Referrer-Policy: no-referrer');
+        header("Content-Security-Policy: default-src 'none'; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+        $error = null;
+        try {
+            $root = rtrim(ABSPATH, '/');
+            [$origin, $prefix] = self::address();
+            $url = $origin . $prefix;
+            if (is_file($root . '/wp-config.php') || is_link($root . '/wp-config.php')
+                || @is_file(dirname($root) . '/wp-config.php') || @is_link(dirname($root) . '/wp-config.php')) {
+                http_response_code(409);
+                throw new \RuntimeException('已有 WordPress 配置，不会覆盖。请继续访问 install.php 完成安装，或登录已有站点。');
+            }
+            if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+                // MU loading precedes wp_magic_quotes(); these are raw values.
+                $input = $_POST;
+                foreach ($input as $value) {
+                    if (!is_string($value) || strlen($value) > 4096) { throw new \RuntimeException('无效的表单数据。'); }
+                }
+                self::prepare($root, $input, $url);
+                header('Location: ' . $url . '/wp-admin/install.php', true, 303);
+                return;
+            }
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
+                http_response_code(405);
+                throw new \RuntimeException('仅接受 GET / POST。');
+            }
+        } catch (\Throwable $exception) {
+            if (http_response_code() < 400) { http_response_code(400); }
+            $error = $exception->getMessage();
+        }
+        ?>
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WordPress SQLite 配置</title>
+<style>body{font:16px/1.65 system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#17212d}input,select,button{box-sizing:border-box;width:100%;padding:10px;margin:5px 0 14px;font:inherit}.notice{padding:14px;background:#eef4fa}button{background:#235a80;color:white;border:0;cursor:pointer}</style>
+<h1>WordPress SQLite 配置</h1>
+<?php if ($error !== null): ?>
+<p class="notice"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
+<p>如已开始写入后失败，请通过主机面板检查本次新建文件和安装锁；不会自动覆盖或删除已有数据。</p>
+<?php else: ?>
+<p>WPLite 使用 SQLite，无需填写 MySQL 账号。配置完成后，将进入 WordPress 官方安装页面设置站点和管理员。</p>
+<p class="notice">此入口公开访问，请上传后立即完成全部安装步骤。建议使用 HTTPS。</p>
+<form method="post">
+<details><summary>数据库存储（默认自动选择）</summary>
+<select name="storage"><option value="auto">优先私有目录；不可用时验证站内保护</option><option value="private">仅允许网站公开目录外</option><option value="protected">验证过的站内受保护目录</option></select>
+<label>指定私有目录（可留空，填写时必须是不存在的绝对路径）<input name="data-dir" placeholder="/home/account/private/my-site"></label>
+<p>站内存储仅在服务器真实拒绝数据库下载后启用；不支持该验证的主机需要使用私有目录。</p>
+</details>
+<button type="submit">配置 SQLite，继续安装 WordPress</button>
+</form>
+<?php endif; ?>
+</html>
+        <?php
     }
 }

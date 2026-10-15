@@ -1,7 +1,10 @@
 .cache/
 dist/
-webroot/
-!webroot/wp-signup.php
+/wplite-data-*/
+webroot/*
+!webroot/wp-content/
+webroot/wp-content/*
+!webroot/wp-content/mu-plugins/
+webroot/wp-content/mu-plugins/*
 !/webroot/wp-content/mu-plugins/wplite.php
 !/webroot/wp-content/mu-plugins/wplite/
-!/webroot/wp-content/db.php

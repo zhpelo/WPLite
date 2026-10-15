@@ -12,24 +12,28 @@ drop-in 完成全新站点安装。优先交付能直接上传使用的 PHP 文�
 
 ## 当前目录与加载方式
 
-- `webroot/`：可直接上传到 WordPress 根目录的内容，不包含 WordPress 核心。
-- `webroot/wplite-setup.php`：仅用于全新站点的浏览器安装入口。
-- `webroot/wp-content/mu-plugins/wplite.php`：MU 插件入口。
-- `webroot/wp-content/mu-plugins/wplite/setup.php`：一次性安装逻辑，不在正常请求中加载。
+- `webroot/`：本地 WordPress 运行目录；WPLite 交付仅包含下列 drop-in/MU 文件，
+  其中用于本地运行的官方核心不属于本项目维护或发行内容。
+- `webroot/wp-content/db.php`：随包上传的数据库 drop-in；`WP_SETUP_CONFIG` 阶段直接返回，
+  让官方未连接的 wpdb 占位对象继续引导至 MU 插件，正常请求再初始化 SQLite。
+- `webroot/wp-content/mu-plugins/wplite.php`：MU 入口，只在 `WP_SETUP_CONFIG` 阶段接管配置。
+- `webroot/wp-content/mu-plugins/wplite/setup.php`：SQLite 配置页和一次性数据库/配置文件创建逻辑，
+  不在正常请求中加载；完成后转到官方 `wp-admin/install.php`。
 - `webroot/wp-content/mu-plugins/wplite/bootstrap.php`、`environment.php`：必要的启动与环境检查。
-- `webroot/wp-content/mu-plugins/wplite/db-template.php`：安装时复制为 `wp-content/db.php`。
-  模板内部路径以安装后的 drop-in 位置为准，不要按模板所在目录改写。
 - `webroot/wp-content/mu-plugins/wplite/vendor/sqlite/`：内置上游驱动，保留许可证和版权声明。
 
-配置加载 bootstrap 后进入官方 `wp-settings.php`；数据库通过 `wp-content/db.php`
-加载 SQLite 驱动。不要仅依赖 MU 插件加载时机初始化数据库。
+首页在缺少配置时进入官方 `setup-config.php`；MU 处理 SQLite 配置，再沿用官方
+`install.php` 创建站点和管理员。已配置时由 `wp-config.php` 加载 bootstrap 后进入
+官方 `wp-settings.php`，通过 `wp-content/db.php` 加载 SQLite 驱动。
+不要修改核心文件、恢复独立安装入口、复制官方管理员表单或自行调用 wp_install()。
 
 ## 安装和运行底线
 
 - 用户只能上传文件和使用浏览器，也必须能完成安装。不要要求 SSH、CLI、Python、
   Composer、构建步骤或安装时下载依赖。
 - 仅支持全新站点，不覆盖已有 `wp-config.php`、数据库 drop-in 或站点数据。
-- 保留必要的所有者凭据校验、防重复安装和数据库访问保护，不为减少代码移除安全底线。
+- 安装入口按用户要求公开访问，直接展示设置表单，不要求安装口令、所有者凭据文件、
+  HTTPS 或 Origin 匹配。保留防重复安装、拒绝覆盖已有站点和数据库访问保护。
 - 数据库优先放在公开目录之外。站内存储必须先确认服务器拒绝下载敏感文件；
   不以随机路径、PHP 检查或未经验证的 `.htaccess` 代替服务器访问控制。
 - 安装失败明确报错，不静默重建丢失的数据库，不自动删除用户数据或开发恢复流程。

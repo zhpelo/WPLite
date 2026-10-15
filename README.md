@@ -10,28 +10,34 @@ WPLite 采用精简 MU 插件和 SQLite 数据库 drop-in，已内置
 
 - 全新、尚未配置的官方 WordPress；当前不支持已有 MySQL 站点迁移。
 - Linux/POSIX 主机，PHP 8.3–8.5，并启用 PDO SQLite。
-- SQLite 3.51.3 或更高版本（排除 3.52.0），或已修复的 3.44.6 / 3.50.7。
-- HTTPS、可写的本地磁盘，以及通过主机面板或 FTP 上传文件的权限。
+- SQLite 3.37.0 或更高版本。按 PDO 实际可用驱动检测，不依赖扩展名称；兼容当前静态 PHP 提供的旧式 PDO SQLite 接口。
+- 可写的本地磁盘，以及通过主机面板或 FTP 上传文件的权限。HTTP 和 HTTPS 均可访问安装页，建议使用 HTTPS。
 
 不需要 SSH、终端命令、Python、Composer，也不需要安装时下载驱动。
 
 ## 安装步骤
 
 1. 通过主机面板上传并解压官方 WordPress，先不要运行 WordPress 安装向导。
-2. 将本仓库 **`webroot/` 里面的内容**上传到 WordPress 根目录，使
-   `wplite-setup.php` 与 `wp-admin/` 同级。不要把整个 `webroot` 目录作为子目录上传，
-   也不要通过 WordPress 后台的“上传插件”安装。
-3. 浏览器打开 `https://你的域名/wplite-setup.php`。若 WordPress 位于子目录，请在该子目录下打开安装页。
-4. 按页面提示，在主机面板新建 `wplite-setup-key.php`，复制页面提供的凭据内容。
-   保留当前页面和安装口令；这一步用于防止其他访客抢先安装。
-5. 填写站点标题、管理员账号、邮箱和密码，提交安装。数据库存储通常保留默认选项。
-6. 安装完成后登录 WordPress，通过面板删除 `wplite-setup.php` 和剩余的
-   `wplite-setup-key.php`。安装锁可以保留。
+2. 将 WPLite 的 `webroot/wp-content/db.php`、`webroot/wp-content/mu-plugins/wplite.php`
+   和 `webroot/wp-content/mu-plugins/wplite/` 上传到 WordPress 的对应位置。
+   只适用于全新站点，不要覆盖其他数据库插件的 `db.php`；不是通过后台“上传插件”安装。
+3. 浏览器访问网站首页，WordPress 会转到官方 `wp-admin/setup-config.php`。
+   WPLite MU 插件在这个配置阶段显示 SQLite 配置，无需填写 MySQL 账号或安装口令。
+4. 通常保持默认存储选项，点击“配置 SQLite，继续安装 WordPress”。
+5. 自动进入官方 `wp-admin/install.php`，填写站点标题、管理员账号、邮箱和密码，完成安装并登录。
 
-安装程序创建 SQLite 数据库、`wp-content/db.php`、`wp-config.php` 和管理员账号，
-不修改 WordPress 核心。发现已有配置或数据库 drop-in 时拒绝覆盖。
+安装入口对所有访客开放，上传后请立即完成安装，以免被他人抢先设置。
+HTTP 会明文传输管理员密码，生产环境建议使用 HTTPS。
+
+WPLite 只创建 SQLite 数据库和 `wp-config.php`，管理员和站点初始化沿用官方安装页面。
+不修改 `setup-config.php`、`install.php` 或其他核心文件，不再提供独立安装入口。
+已有配置时拒绝重复配置；安装锁可以保留。安装前后都不要删除或替换数据库 drop-in。
 
 ## 数据库与权限
+
+旧 SQLite（如 3.45.2）使用 DELETE 日志模式，避免已知 WAL-reset 数据损坏问题；
+已修复的 3.44.6、3.50.7 和 3.51.3+（不含 3.52.0）使用 WAL。
+两种模式均保留 FULL 同步，不关闭事务日志；DELETE 模式的读写并发能力较弱。
 
 默认优先将数据库放在网站公开目录之外。如果主机不允许，安装程序只在 HTTP 验证
 确认服务器禁止下载数据库及相关文件后，才启用站内受保护目录。
@@ -56,5 +62,5 @@ Nginx、不支持 `.htaccess` 或限制本站 HTTP 请求的主机，可能需�
 当前优先快速上线，只维护必要的安装与 SQLite 运行逻辑。不维护 WordPress fork、
 核心同步/rebase、整站发行、tools、checks、测试平台、备份恢复或 ePHPm。
 
-`webroot/` 为可上传文件；`AGENTS.md` 为开发约束。内置驱动保留上游源码和许可证，
-不自行开发 SQL 翻译器。
+`webroot/` 中的 WPLite drop-in 和 MU 文件为交付内容，本地运行用的官方核心不随项目发行；
+`AGENTS.md` 为开发约束。内置驱动保留上游源码和许可证，不自行开发 SQL 翻译器。
