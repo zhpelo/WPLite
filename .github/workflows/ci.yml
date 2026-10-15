@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   tooling:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -23,7 +23,7 @@ jobs:
       - name: Reject unpinned or altered dependencies
         run: python3 tools/wplite.py check
   sqlite-install:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -37,6 +37,10 @@ jobs:
         run: python3 tools/wplite.py verify
       - name: Verify genuine SQLite installation and HTTP requests
         run: python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
+      - name: Verify owner-authorized Web installation and real Apache storage protection
+        run: >-
+          python3 tests/web_install.py --php .cache/test-runtime/install/bin/php
+          --httpd /usr/sbin/apache2 --apache-modules /usr/lib/apache2/modules
       - name: Build installable ZIP
         run: python3 tools/wplite.py build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

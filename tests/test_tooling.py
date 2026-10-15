@@ -141,7 +141,7 @@ class IntegrationTest(unittest.TestCase):
         self.second_sha = w.git(self.upstream, 'rev-parse', '7.1.4')
         w.git(self.root, 'remote', 'add', 'upstream', str(self.upstream))
         runtime = self.root / 'runtime/root'
-        for name in ['wplite/bootstrap.php', 'wp-content/db.php', 'wp-content/mu-plugins/wplite.php', 'WPLITE.md']:
+        for name in ['wp-config.php', 'wplite/bootstrap.php', 'wp-content/db.php', 'wp-content/mu-plugins/wplite.php', 'WPLITE.md']:
             target = runtime / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('<?php // local overlay\n' if name.endswith('.php') else 'WPLite\n')
@@ -206,6 +206,28 @@ class IntegrationTest(unittest.TestCase):
         unchanged = self.lock_path.read_bytes()
         self.assertEqual(w.sync(self.root, self.lock_path, None, False)['status'], 'up-to-date')
         self.assertEqual(self.lock_path.read_bytes(), unchanged)
+
+    def test_site_credentials_never_enter_an_overlay(self):
+        unchanged = self.lock_path.read_bytes()
+        for relative in sorted(w.SITE_ONLY_FILES):
+            path = self.root / 'runtime/root' / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('private site material')
+            with self.assertRaisesRegex(w.Error, 'must never enter an overlay'):
+                w.sync(self.root, self.lock_path, '7.1.3', False)
+            path.unlink()
+            self.assertEqual(self.lock_path.read_bytes(), unchanged)
+
+    def test_committed_site_credentials_cannot_be_built(self):
+        result = w.sync(self.root, self.lock_path, '7.1.3', False)
+        candidate = Path(result['candidate'])
+        (candidate / 'wplite/setup-key.php').write_text('private setup material')
+        w.git(candidate, 'add', '--', 'wplite/setup-key.php')
+        w.git(candidate, 'commit', '-m', 'Accidental site credentials')
+        lock = w.load_lock(self.lock_path)
+        lock['integration']['commit'] = w.git(candidate, 'rev-parse', 'HEAD')
+        with self.assertRaisesRegex(w.Error, 'must never enter a distribution'):
+            w.verify_integration(candidate, lock)
 
     def test_conflict_preserves_lock_and_stops_with_candidate_path(self):
         w.sync(self.root, self.lock_path, '7.1.3', False)

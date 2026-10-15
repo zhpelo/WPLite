@@ -28,7 +28,7 @@ permissions:
 jobs:
   candidate:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: write
@@ -80,6 +80,7 @@ jobs:
         run: |
           .cache/test-runtime/install/bin/php tests/environment.php
           python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
+          python3 tests/web_install.py --php .cache/test-runtime/install/bin/php --httpd /usr/sbin/apache2 --apache-modules /usr/lib/apache2/modules
           python3 tools/wplite.py build
       - name: Record rebase comparison
         if: steps.candidate.outputs.ready == 'true'

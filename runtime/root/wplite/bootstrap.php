@@ -5,6 +5,7 @@ declare(strict_types=1);
 // too late to prevent a missing/replaced db.php from falling back to MySQL.
 require_once __DIR__ . '/src/Environment.php';
 require_once __DIR__ . '/src/Maintenance.php';
+require_once __DIR__ . '/src/Storage.php';
 
 try {
     \WPLite\Environment::requireSupported();
@@ -22,6 +23,7 @@ try {
         throw new RuntimeException('Custom WP_CONTENT_DIR is not supported by this development build.');
     }
     $wpliteState = \WPLite\Environment::readState(dirname(DB_PATH));
+    \WPLite\Storage::assertInstalled(dirname(DB_PATH), $wpliteState);
     if (!hash_equals(WPLITE_SITE_ID, $wpliteState['site_id'] ?? '') || ($wpliteState['database'] ?? '') !== DB_PATH) {
         throw new RuntimeException('The database path or site identity does not match its installation state.');
     }

@@ -31,7 +31,8 @@ WP_REPOSITORY = "https://github.com/WordPress/WordPress.git"
 SQLITE_REPOSITORY = "https://github.com/WordPress/sqlite-database-integration.git"
 STABLE_TAG = re.compile(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?\Z")
 SHA = re.compile(r"[0-9a-f]{40}\Z")
-MANAGED_ROOTS = ("wplite", "wp-content/db.php", "wp-content/mu-plugins/wplite.php", "WPLITE.md")
+MANAGED_ROOTS = ("wplite", "wp-config.php", "wp-content/db.php", "wp-content/mu-plugins/wplite.php", "WPLITE.md")
+SITE_ONLY_FILES = frozenset(("wplite/site-config.php", "wplite/setup-key.php", "wplite/.install.lock", "wplite/owner-secret.txt"))
 MAX_ARCHIVE = 64 * 1024 * 1024
 DRIVER_ARCHIVE_ROOT = "plugin-sqlite-database-integration"
 SQLITE_RELEASE_API = "https://api.github.com/repos/WordPress/sqlite-database-integration/releases/"
@@ -277,6 +278,8 @@ def overlay(repo: Path, root: Path, lock: dict) -> None:
     for source in sorted((root / "runtime" / "root").rglob("*")):
         if source.is_file():
             relative = source.relative_to(root / "runtime" / "root").as_posix()
+            if relative in SITE_ONLY_FILES or relative == "wplite/distribution.json":
+                raise Error(f"Site credentials/state or generated manifest must never enter an overlay: {relative}")
             if not any(relative == p or relative.startswith(p + "/") for p in MANAGED_ROOTS):
                 raise Error(f"Overlay attempts to modify an unmanaged path: {relative}")
             if relative in official:
@@ -436,6 +439,8 @@ def verify_integration(repo: Path, lock: dict) -> dict[str, bytes]:
     base = lock["wordpress"]["commit"]
     git(repo, "merge-base", "--is-ancestor", base, commit)
     files = source_files(repo, commit)
+    if SITE_ONLY_FILES.intersection(files):
+        raise Error("Site credentials or installation state must never enter a distribution")
     original = source_files(repo, base)
     for name, content in original.items():
         if files.get(name) != content:

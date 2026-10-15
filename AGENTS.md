@@ -14,6 +14,10 @@
   Build reads the lock's integration SHA, not uncommitted overlay files.
 - Tests: `python3 -m unittest discover -s tests -v`, `php tests/environment.php`,
   and `python3 tests/smoke.py --php .cache/test-runtime/install/bin/php`.
+  Web checks: `python3 tests/web_install.py --php .cache/test-runtime/install/bin/php`;
+  require `--httpd /path/to/httpd --apache-modules /path/to/modules` for the real
+  protected-storage success path. Tests start isolated unprivileged processes;
+  never reconfigure or start the user's system Apache/Nginx services.
   `python3 tools/prepare_test_runtime.py` builds that isolated PHP when needed;
   it must not modify or install a system PHP.
 - Never remove environment safeguards to make tests pass. Tests must use real
@@ -23,5 +27,5 @@
 - Preserve user data and Git work. `.cache/` and `dist/` are generated; source
   archives, compiler logs and candidate conflict state remain useful evidence.
 - Current local proof covers PHP 8.4 only. Do not claim a live GitHub workflow,
-  PHP 8.3/8.5 matrix, shared-hosting Web installer, signed updater, or WooCommerce
+  PHP 8.3/8.5 matrix, complete shared-hosting/TLS matrix, signed updater, or WooCommerce
   compatibility without their actual execution evidence.

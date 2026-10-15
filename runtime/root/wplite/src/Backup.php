@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace WPLite;
 
 require_once __DIR__ . '/Environment.php';
+require_once __DIR__ . '/Storage.php';
 
 /** Consistent, authenticated database snapshots. No live-file copying. */
 final class Backup
@@ -24,7 +25,7 @@ final class Backup
         return $key;
     }
 
-    private static function target(string $path, string $publicRoot): string
+    private static function target(string $path, string $publicRoot, string $protectedData): string
     {
         if (!str_starts_with($path, '/') || str_contains($path, "\0") || in_array('..', explode('/', $path), true)) {
             throw new \RuntimeException('Backup output must be an absolute path without parent traversal.');
@@ -34,7 +35,8 @@ final class Backup
             throw new \RuntimeException('Backup output parent must already exist.');
         }
         $target = $parent . '/' . basename($path);
-        if (Environment::isWithin($target, $publicRoot) || file_exists($target) || is_link($target)) {
+        if ((Environment::isWithin($target, $publicRoot) && !Environment::isWithin($target, $protectedData))
+            || file_exists($target) || is_link($target)) {
             throw new \RuntimeException('Refusing to overwrite an existing backup or store it in the public document root.');
         }
         return $target;
@@ -65,7 +67,7 @@ final class Backup
         $data = realpath($data);
         $publicRoot = realpath($publicRoot ?? $root);
         if ($root === false || $data === false || $publicRoot === false
-            || !Environment::isWithin($root, $publicRoot) || Environment::isWithin($data, $publicRoot)) {
+            || !Environment::isWithin($root, $publicRoot)) {
             throw new \RuntimeException('A private data directory and the real public document root are required.');
         }
         if (!preg_match('/^[a-zA-Z0-9_]+$/D', $prefix) || !preg_match('/^[a-f0-9]{48}$/D', $siteId)) {
@@ -80,6 +82,10 @@ final class Backup
         }
         try {
             $state = Environment::readState($data);
+            Storage::assertInstalled($data, $state);
+            if (($state['public_root'] ?? '') !== $publicRoot || ($state['root'] ?? '') !== $root) {
+                throw new \RuntimeException('Backup storage boundary does not match this installed site.');
+            }
             if (($state['site_id'] ?? '') !== $siteId || ($state['status'] ?? '') !== 'installed') {
                 throw new \RuntimeException('Backup source does not match an installed site.');
             }
@@ -97,7 +103,7 @@ final class Backup
                 }
                 $output = $parent . '/' . gmdate('Ymd\THis\Z') . '-' . bin2hex(random_bytes(6));
             }
-            $target = self::target($output, $publicRoot);
+            $target = self::target($output, $publicRoot, $data);
             $bytes = (int) $source->query('PRAGMA page_count')->fetchColumn()
                 * (int) $source->query('PRAGMA page_size')->fetchColumn();
             $free = disk_free_space(dirname($target));

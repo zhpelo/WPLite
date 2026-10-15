@@ -42,8 +42,9 @@ SQLite 驱动独立跟踪社区正式发行。没有核心更新时，新驱动�
 
 ## 安装验证
 
-当前具备 CLI 安装原型；完整虚拟主机 Web 安装向导尚在路线图中。安装方式与环境
-要求见 [发行包安装说明](runtime/root/WPLITE.md)。不得直接升级线上 WordPress
+当前具备 CLI 和所有者密钥认证的 Web 安装原型，支持私有目录与经过真实 HTTP
+拒绝验证的公开目录存储。见 [Web 安装与保护](docs/web-install.md) 和
+[发行包安装说明](runtime/root/WPLITE.md)。不得直接升级线上 WordPress
 或将本构建用于真实交易。
 
 已增加 CLI 数据库备份、校验和恢复，支持停写排空、失败后的独立回退及重新开放。
@@ -65,6 +66,7 @@ python3 tools/prepare_test_runtime.py
 - [架构与同步约定](docs/architecture.md)
 - [交付路线与完成证据](docs/roadmap.md)
 - [上游同步操作](docs/upstream-sync.md)
+- [Web 安装与数据目录保护](docs/web-install.md)
 - [本地与 GitHub 验证记录及尚未验证的范围](docs/verification.md)
 
 ## 启用 GitHub 工作流

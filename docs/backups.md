@@ -1,6 +1,6 @@
 # 数据库备份与恢复
 
-当前是开发版数据库后端，已在 PHP 8.4.26＋SQLite 3.53.4 验证。Web 安装/恢复
+当前是开发版数据库后端，已在 PHP 8.4.26＋SQLite 3.53.4 验证。Web 恢复
 界面、全站文件备份和商店认证仍未完成。不能把这里的数据库验证理解为整站或
 WooCommerce 的生产认证。
 
@@ -26,7 +26,9 @@ php wplite/cli.php restore --backup-dir /private/site/backups/BACKUP-ID --data-d
 
 默认快照保存到私有数据目录的 backups 子目录。可通过
 `backup-create --output-dir /private/NEW-DIRECTORY` 指定新的目录；必须位于真实
-公开根目录外，父目录已经存在，目标本身不存在。不会覆盖已有快照。
+公开根目录外，或属于安装时已通过 HTTP 拒绝验证的同一数据目录；父目录已经存在，
+目标本身不存在。不会覆盖已有快照。更换主机/服务器规则后需重新核实保护，参见
+[Web 安装与目录保护](web-install.md)。
 
 ## 快照与校验
 
