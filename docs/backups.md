@@ -50,6 +50,14 @@ php wplite/cli.php site-backup-create --data-dir /private/site
 php wplite/cli.php site-backup-verify --data-dir /private/site --backup-dir /private/site/backups/site-BACKUP-ID
 ```
 
+若快照输出在公开根内的受保护数据树中，创建还必须提供
+`--public-origin https://example.com`（scheme/host/port，不带站点路径）。每次先用
+随机公开控制响应和新快照目录中的数据库、JSON、PHP 配置、图片及文本挑战验证
+HTTP 403/404 拒绝，完成清理后才复制真实内容。不沿用安装时旧证明来推断新增
+PHP/媒体路径也安全，不接受重定向、500 或带挑战内容的拒绝响应。需要 loopback
+HTTP(S)、有效 TLS 和可写的公开控制探针位置；只有 loopback 主机可用 HTTP。
+输出到公开根之外的快照不需要 origin，也不会发起这些 HTTP 请求。
+
 创建过程不加载 WordPress、插件或主题，先持有独占维护操作锁、写入持久标记，
 等待所有正常请求（含 shutdown）释放共享锁。数据库使用 VACUUM INTO，文件
 以流式复制并同步落盘，最后重新扫描来源，确认文件树/内容/元数据未变化；完整

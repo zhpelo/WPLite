@@ -201,7 +201,10 @@ def main():
                 owner = subprocess.Popen([str(php), '-n', str(fixture), 'create', str(interrupted)],
                     env=env | no_wp | {'WPLITE_COPY_FAULT': 'hold'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 try:
-                    for attempt in range(600):
+                    # Thousands of real fsyncs can take longer on a busy disk.
+                    # This is the fixture observation window, not a production
+                    # lock timeout or a substitute for reaching the real copy.
+                    for attempt in range(2400):
                         if (data / 'copy-paused').exists(): break
                         if owner.poll() is not None: raise RuntimeError('Backup owner exited before crash probe: ' + owner.communicate()[1])
                         time.sleep(0.05)

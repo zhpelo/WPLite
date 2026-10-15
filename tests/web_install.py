@@ -296,8 +296,15 @@ def main():
                     assert request(backup_url)[0] == 403
                     subprocess.run([str(php), '-n', str(site / 'wplite/cli.php'), 'restore', '--data-dir', str(data),
                         '--backup-dir', backup['directory']], check=True, capture_output=True, text=True)
+                    for origin in [None, 'http://example.invalid', url + '/wrong-path',
+                                   'https://user:fixture@example.invalid', url + '#fragment']:
+                        command = [str(php), '-n', str(site / 'wplite/cli.php'), 'site-backup-create', '--data-dir', str(data)]
+                        if origin is not None:
+                            command += ['--public-origin', origin]
+                        rejected = subprocess.run(command, capture_output=True, text=True)
+                        assert rejected.returncode == 1 and not (data / 'maintenance.json').exists()
                     full = subprocess.run([str(php), '-n', str(site / 'wplite/cli.php'), 'site-backup-create',
-                        '--data-dir', str(data)], check=True, capture_output=True, text=True)
+                        '--data-dir', str(data), '--public-origin', url], check=True, capture_output=True, text=True)
                     full = json.loads(full.stdout)
                     snapshot = Path(full['directory'])
                     manifest = json.loads((snapshot / 'manifest.json').read_text())
@@ -315,6 +322,33 @@ def main():
                     (data / '.htaccess').write_bytes(original)
                     assert request(url + '/')[0] == 200
             print('PASS: real unprivileged Apache HTTP-denied storage, database backup/restore, full site snapshot exclusion/privacy and deny-file tamper guard', flush=True)
+            # The stored .htaccess hash alone cannot detect changed routing that
+            # exempts PHP or images. Probe the new layout before copying secrets.
+            database_digest = hashlib.sha256((data / 'site.sqlite').read_bytes()).hexdigest()
+            for mode in ['backup-php-exposed', 'backup-images-exposed', 'redirect', 'server-error', 'denied-but-leaking', 'bad-control']:
+                number = port()
+                origin = f'http://127.0.0.1:{number}'
+                scenario = env | {'WPLITE_TEST_SITE': str(site), 'WPLITE_TEST_PROBE_MODE': mode}
+                target = data / 'backups' / ('full-probe-' + mode)
+                with server([php, '-n', '-S', f'127.0.0.1:{number}', '-t', site,
+                             ROOT / 'tests/fixtures/probe_router.php'], site, scenario) as running:
+                    ready(running, origin + '/readme.html')
+                    state_file = data / 'site.json'
+                    original_state = state_file.read_bytes()
+                    unkeyed = json.loads(original_state)
+                    unkeyed.pop('backup_key', None)
+                    state_file.write_text(json.dumps(unkeyed))
+                    try:
+                        rejected = subprocess.run([str(php), '-n', str(site / 'wplite/cli.php'), 'site-backup-create',
+                            '--data-dir', str(data), '--output-dir', str(target), '--public-origin', origin], capture_output=True, text=True)
+                        assert rejected.returncode == 1, (mode, rejected.stdout, rejected.stderr)
+                        assert 'backup_key' not in json.loads(state_file.read_bytes())
+                        assert target.is_dir() and not list(target.iterdir())
+                        assert not list(site.glob('wplite-probe-*')) and not (data / 'maintenance.json').exists()
+                    finally:
+                        state_file.write_bytes(original_state)
+            assert hashlib.sha256((data / 'site.sqlite').read_bytes()).hexdigest() == database_digest
+            print('PASS: fresh full snapshot probes reject PHP/image bypass, redirects, 500, leaking denial and false control before real database/config copying', flush=True)
         else:
             print('NOT RUN: real Apache protected-storage success path (supply --httpd and --apache-modules)', flush=True)
 

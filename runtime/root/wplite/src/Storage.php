@@ -86,6 +86,65 @@ final class Storage
         }
     }
 
+    /** Probe the new full-snapshot layout before any real credentials are copied. */
+    public static function probeSiteBackup(string $root, string $public, string $target, string $origin): void
+    {
+        $origin = rtrim($origin, '/');
+        $url = parse_url($origin);
+        if (!filter_var($origin, FILTER_VALIDATE_URL) || !is_array($url)
+            || !in_array($url['scheme'] ?? '', ['https', 'http'], true)
+            || empty($url['host']) || isset($url['user']) || isset($url['pass'])
+            || isset($url['query']) || isset($url['fragment']) || !empty($url['path'])
+            || ($url['scheme'] === 'http' && !in_array(strtolower($url['host']), ['localhost', '127.0.0.1', '[::1]'], true))
+            || !Environment::isWithin($target, $public) || !is_dir($target) || is_link($target)
+            || array_diff(scandir($target), ['.', '..'])) {
+            throw new \RuntimeException('Public snapshots require a valid HTTPS origin (or loopback HTTP) and a fresh protected target.');
+        }
+        $id = bin2hex(random_bytes(16));
+        $challenge = bin2hex(random_bytes(24));
+        $positive = $root . '/wplite-probe-' . $id . '.txt';
+        $created = $directories = [];
+        $controlCreated = false;
+        $encode = static fn (string $path): string => implode('/', array_map('rawurlencode', explode('/', $path)));
+        try {
+            self::freshFile($positive, $challenge);
+            $controlCreated = true;
+            [$status, $body] = self::get($origin . $encode(substr($positive, strlen($public))) . '?wplite=' . $id);
+            if ($status !== 200 || $body !== $challenge) {
+                throw new \RuntimeException('Full snapshot public control probe failed; no real snapshot was written.');
+            }
+            foreach (['manifest.json', 'database.sqlite', 'site/wplite/site-config.php',
+                      'site/wp-content/uploads/private.jpg', 'site/wp-content/uploads/private.txt'] as $relative) {
+                $file = $target . '/' . $relative;
+                $directory = $target;
+                if (dirname($relative) !== '.') {
+                    foreach (explode('/', dirname($relative)) as $component) {
+                        $directory .= '/' . $component;
+                        if (!is_dir($directory)) {
+                            if (!mkdir($directory, 0700)) {
+                                throw new \RuntimeException('Cannot create full snapshot storage probes.');
+                            }
+                            $directories[] = $directory;
+                        }
+                    }
+                }
+                self::freshFile($file, $challenge);
+                $created[] = $file;
+                [$status, $body] = self::get($origin . $encode(substr($file, strlen($public))) . '?wplite=' . $id);
+                if (!in_array($status, [403, 404], true) || str_contains((string) $body, $challenge)) {
+                    throw new \RuntimeException('Full snapshot storage denial is unproven; no database or configuration was copied.');
+                }
+            }
+        } finally {
+            foreach ($created as $file) { unlink($file); }
+            foreach (array_reverse($directories) as $directory) { rmdir($directory); }
+            if ($controlCreated && is_file($positive)) { unlink($positive); }
+        }
+        if (file_exists($positive) || is_link($positive) || array_diff(scandir($target), ['.', '..'])) {
+            throw new \RuntimeException('Full snapshot probes were not completely cleaned; no real snapshot was written.');
+        }
+    }
+
     private static function freshFile(string $file, string $content): void
     {
         $handle = fopen($file, 'x');

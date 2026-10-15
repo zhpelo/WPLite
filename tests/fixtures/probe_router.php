@@ -21,6 +21,11 @@ if (str_starts_with($path, '/.wplite-data/')) {
     if ($mode === 'backups-exposed' && str_starts_with($path, '/.wplite-data/backups/')) {
         return false;
     }
+    if (str_starts_with($path, '/.wplite-data/backups/') && str_contains($path, '/site/')
+        && (($mode === 'backup-php-exposed' && str_ends_with($path, '.php'))
+            || ($mode === 'backup-images-exposed' && str_ends_with($path, '.jpg')))) {
+        return false;
+    }
     http_response_code(403);
     if ($mode === 'denied-but-leaking') {
         $file = realpath(getenv('WPLITE_TEST_SITE') . $path);
