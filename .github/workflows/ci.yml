@@ -1,0 +1,47 @@
+name: Validate WPLite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test stable-tag selection, rebase safety and deterministic packaging
+        run: python3 -m unittest discover -s tests -v
+      - name: Reject unpinned or altered dependencies
+        run: python3 tools/wplite.py check
+  sqlite-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare isolated PHP without MySQL extensions
+        run: python3 tools/prepare_test_runtime.py
+      - name: Test SQLite environment policy
+        run: .cache/test-runtime/install/bin/php tests/environment.php
+      - name: Verify locked integration
+        run: python3 tools/wplite.py verify
+      - name: Verify genuine SQLite installation and HTTP requests
+        run: python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
+      - name: Build installable ZIP
+        run: python3 tools/wplite.py build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wplite-development-build
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14

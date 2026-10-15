@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "wplite_version": "0.1.0-dev",
+  "wordpress": {
+    "repository": "https://github.com/WordPress/WordPress.git",
+    "tag": "7.1.3",
+    "commit": "fc9832bef919c2a08541248db23af90d14ffb082"
+  },
+  "sqlite": {
+    "repository": "https://github.com/WordPress/sqlite-database-integration.git",
+    "tag": "v3.1.0",
+    "commit": "6546e4538b708a1d8a565a1d31688bd63b610fa3",
+    "archive_url": "https://github.com/WordPress/sqlite-database-integration/releases/download/v3.1.0/plugin-sqlite-database-integration.zip",
+    "sha256": "02a7958a27959c00f2d579ea27f2047ad2fe6a2c4758c2459d36d0b0ae0b6624"
+  },
+  "integration": {
+    "commit": "664346a5ae700e08c3f0e9ec4dfe005d206d9b11",
+    "branch": "sync/wp-7.1.3-1u6m8mop"
+  }
+}

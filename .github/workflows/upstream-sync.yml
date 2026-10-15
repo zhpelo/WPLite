@@ -1,0 +1,104 @@
+name: Sync official stable tags
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Optional explicit official stable tag'
+        type: string
+        required: false
+      approve_series:
+        description: 'Approve a new WordPress major/minor release series'
+        type: boolean
+        default: false
+      sqlite_tag:
+        description: 'Optional published SQLite driver vX.Y.Z tag'
+        type: string
+        required: false
+
+concurrency:
+  group: wplite-upstream-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Discover and rebase only official stable tags
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+          APPROVE_SERIES: ${{ inputs.approve_series }}
+          SQLITE_TAG: ${{ inputs.sqlite_tag }}
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          arguments = ['python3', 'tools/wplite.py', 'sync']
+          if os.environ.get('REQUESTED_TAG'):
+              arguments += ['--tag', os.environ['REQUESTED_TAG']]
+          if os.environ.get('APPROVE_SERIES') == 'true':
+              arguments += ['--approve-series']
+          if os.environ.get('SQLITE_TAG'):
+              arguments += ['--sqlite-tag', os.environ['SQLITE_TAG']]
+          subprocess.run(arguments, check=True)
+          PY
+      - name: Check candidate status
+        id: candidate
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          result = json.loads(Path('.cache/sync-result.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              print('ready=' + str(result['status'] == 'candidate').lower(), file=output)
+          if result.get('next_series'):
+              print('New stable series available; manual approval required: ' + result['next_series'])
+          PY
+      - name: Test tooling and source parity
+        if: steps.candidate.outputs.ready == 'true'
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 tools/wplite.py verify
+      - name: Prepare isolated test PHP
+        if: steps.candidate.outputs.ready == 'true'
+        run: python3 tools/prepare_test_runtime.py
+      - name: Verify installation, HTTP behavior and reproducible build
+        if: steps.candidate.outputs.ready == 'true'
+        run: |
+          .cache/test-runtime/install/bin/php tests/environment.php
+          python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
+          python3 tools/wplite.py build
+      - name: Record rebase comparison
+        if: steps.candidate.outputs.ready == 'true'
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          r = json.loads(Path('.cache/sync-result.json').read_text())
+          subprocess.run(['git', 'range-diff', r['old_base'] + '..' + r['previous_integration'], r['new_base'] + '..' + r['commit']], check=True)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.candidate.outputs.ready == 'true'
+        with:
+          name: wplite-sync-candidate
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Publish candidate and draft sync PR
+        if: steps.candidate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/publish_sync_pr.py
