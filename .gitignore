@@ -1,8 +1,7 @@
 .cache/
 dist/
-__pycache__/
-*.py[cod]
-.DS_Store
-.env
-.env.*
-!.env.example
+webroot/
+!webroot/wp-signup.php
+!/webroot/wp-content/mu-plugins/wplite.php
+!/webroot/wp-content/mu-plugins/wplite/
+!/webroot/wp-content/db.php
