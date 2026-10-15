@@ -20,7 +20,7 @@ class PublicationPolicyTest(unittest.TestCase):
             self.assertFalse(p.approved_origin(url, 'example/WPLite'))
 
     def test_only_our_identified_sync_prs_can_be_superseded(self):
-        pr = {'body': p.MARKER, 'head': {'ref': 'bot/sync-wp-7.1.3-a_b1', 'repo': {'full_name': 'example/WPLite'}}}
+        pr = {'user': {'login': 'github-actions[bot]'}, 'body': p.MARKER, 'head': {'ref': 'bot/sync-wp-7.1.3-a_b1', 'repo': {'full_name': 'example/WPLite'}}}
         self.assertTrue(p.is_managed_pr(pr, 'example/WPLite'))
         self.assertEqual(p.pr_target(pr), '7.1.3')
         self.assertFalse(p.is_managed_pr(pr, 'other/WPLite'))
@@ -28,7 +28,7 @@ class PublicationPolicyTest(unittest.TestCase):
         self.assertFalse(p.is_managed_pr(pr, 'example/WPLite'))
 
     def test_driver_only_candidates_do_not_hide_or_close_newer_driver_work(self):
-        pr = {'body': p.MARKER, 'head': {'ref': 'bot/sync-wp-7.1.3-sqlite-3.1.1-a_b1', 'repo': {'full_name': 'example/WPLite'}}}
+        pr = {'user': {'login': 'github-actions[bot]'}, 'body': p.MARKER, 'head': {'ref': 'bot/sync-wp-7.1.3-sqlite-3.1.1-a_b1', 'repo': {'full_name': 'example/WPLite'}}}
         self.assertTrue(p.is_managed_pr(pr, 'example/WPLite'))
         self.assertEqual(p.pr_driver(pr), '3.1.1')
         self.assertTrue(p.superseded(pr, '7.1.3', '3.1.2'))
@@ -36,6 +36,11 @@ class PublicationPolicyTest(unittest.TestCase):
         self.assertFalse(p.superseded(pr, '7.1.3', '3.1.1'))
         pr['body'] = p.MARKER
         pr['head']['repo'] = None
+        self.assertFalse(p.is_managed_pr(pr, 'example/WPLite'))
+
+    def test_human_pr_with_copied_bot_marker_is_not_managed(self):
+        pr = {'user': {'login': 'maintainer'}, 'body': p.MARKER,
+              'head': {'ref': 'bot/sync-wp-7.1.3-sqlite-3.1.1-user', 'repo': {'full_name': 'example/WPLite'}}}
         self.assertFalse(p.is_managed_pr(pr, 'example/WPLite'))
 
 

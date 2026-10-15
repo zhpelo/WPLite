@@ -75,6 +75,10 @@ python3 tools/prepare_test_runtime.py
 `upstream-sync.yml` 每 6 小时检查正式标签，验证候选后创建草稿同步 PR，并去重及
 关闭已被更高版本取代的自动候选。跨发布系列只通过手动触发并明确批准。
 
+main 的系统文件和验证代码变更也会触发检查。候选去重会核验实际 Git 来源及
+系统/验证指纹，不只比较版本号；人工接手或来源不明的 PR 不会自动关闭。
+CI 使用 `verify --overlay` 拒绝依赖锁仍指向旧系统文件的构建。
+
 先将工具 main 和锁中记录的集成分支推送到项目自己的 GitHub 仓库，再在仓库
 Settings → Actions 中允许 GitHub Actions 创建 PR。fork 仓库还需主动启用定时
 工作流。GitHub Actions 的调度可能延迟，因此同时提供 workflow_dispatch。

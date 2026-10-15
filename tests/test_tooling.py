@@ -1,10 +1,11 @@
 import copy
 import hashlib
-import importlib.util
 import io
 import json
 from pathlib import Path
 import subprocess
+import shutil
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -12,9 +13,8 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('wplite', ROOT / 'tools/wplite.py')
-w = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(w)
+sys.path.insert(0, str(ROOT / 'tools'))
+import wplite as w
 
 
 def fixture_driver(extra=None):
@@ -69,6 +69,25 @@ class StableTagsTest(unittest.TestCase):
 
 
 class ArchiveTest(unittest.TestCase):
+    def test_git_source_ignores_export_attributes_and_rejects_links(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            w.git(repo, 'init', '-b', 'main')
+            (repo / '.gitattributes').write_text('keep.txt export-ignore\nsubst.txt export-subst\n')
+            (repo / 'keep.txt').write_text('Exact retained bytes\n')
+            (repo / 'subst.txt').write_text('$Format:%H$\n')
+            w.git(repo, 'add', '.')
+            w.git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'Snapshot')
+            commit = w.git(repo, 'rev-parse', 'HEAD')
+            files = w.source_files(repo, commit)
+            self.assertEqual(files['keep.txt'], b'Exact retained bytes\n')
+            self.assertEqual(files['subst.txt'], b'$Format:%H$\n')
+            (repo / 'link.txt').symlink_to('keep.txt')
+            w.git(repo, 'add', 'link.txt')
+            w.git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'Unsupported link')
+            with self.assertRaisesRegex(w.Error, 'Unsupported source member'):
+                w.source_files(repo, w.git(repo, 'rev-parse', 'HEAD'))
+
     def test_wrong_digest_is_rejected(self):
         with self.assertRaises(w.Error):
             w.driver_files(fixture_driver(), '0' * 64)
@@ -207,6 +226,21 @@ class IntegrationTest(unittest.TestCase):
         self.assertEqual(w.sync(self.root, self.lock_path, None, False)['status'], 'up-to-date')
         self.assertEqual(self.lock_path.read_bytes(), unchanged)
 
+    def test_unborn_tooling_main_can_bootstrap_without_claiming_source_provenance(self):
+        root = self.directory / 'unborn'
+        root.mkdir()
+        w.git(root, 'init', '-b', 'main')
+        w.git(root, 'remote', 'add', 'upstream', str(self.upstream))
+        shutil.copytree(self.root / 'runtime', root / 'runtime')
+        lock = root / 'upstream.lock.json'
+        lock.write_bytes(self.lock_path.read_bytes())
+        result = w.sync(root, lock, '7.1.3', False)
+        self.assertIsNone(result['source_commit'])
+        self.assertEqual(w.git(root, 'symbolic-ref', '--short', 'HEAD'), 'main')
+        with self.assertRaises(w.Error):
+            w.git(root, 'rev-parse', '--verify', 'HEAD')
+        self.assertTrue(w.verify_integration(root, w.load_lock(lock)))
+
     def test_site_credentials_never_enter_an_overlay(self):
         unchanged = self.lock_path.read_bytes()
         for relative in sorted(w.SITE_ONLY_FILES):
@@ -275,11 +309,19 @@ class IntegrationTest(unittest.TestCase):
 
     def test_refresh_overlay_is_explicit_and_preserves_official_base(self):
         initial = w.sync(self.root, self.lock_path, '7.1.3', False)
+        lock = w.load_lock(self.lock_path)
+        self.assertEqual(w.verify_overlay(self.root, lock), initial['overlay_sha256'])
         (self.root / 'runtime/root/wplite/bootstrap.php').write_text('<?php // revised overlay\n')
         self.assertEqual(w.sync(self.root, self.lock_path, '7.1.3', False)['status'], 'up-to-date')
+        with self.assertRaisesRegex(w.Error, 'stale or different canonical overlay'):
+            w.verify_overlay(self.root, lock)
+        # A local build still reads the locked SHA, never dirty working files.
+        self.assertTrue(w.build(self.root, self.lock_path, self.directory / 'locked')['archive'])
         refreshed = w.sync(self.root, self.lock_path, '7.1.3', False, refresh=True)
         self.assertNotEqual(initial['commit'], refreshed['commit'])
         self.assertEqual(refreshed['new_base'], self.first_sha)
+        self.assertNotEqual(initial['overlay_sha256'], refreshed['overlay_sha256'])
+        self.assertEqual(w.verify_overlay(self.root, w.load_lock(self.lock_path)), refreshed['overlay_sha256'])
 
     def test_modified_core_is_not_packaged(self):
         candidate = w.sync(self.root, self.lock_path, '7.1.3', False)

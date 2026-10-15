@@ -29,12 +29,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Verify locked integration
+        run: python3 tools/wplite.py verify --overlay
       - name: Prepare isolated PHP without MySQL extensions
         run: python3 tools/prepare_test_runtime.py
       - name: Test SQLite environment policy
         run: .cache/test-runtime/install/bin/php tests/environment.php
-      - name: Verify locked integration
-        run: python3 tools/wplite.py verify
       - name: Verify genuine SQLite installation and HTTP requests
         run: python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
       - name: Verify owner-authorized Web installation and real Apache storage protection

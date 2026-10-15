@@ -1,6 +1,16 @@
 name: Sync official stable tags
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'runtime/**'
+      - 'tools/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+      - 'upstream.lock.json'
+      - '.gitattributes'
+      - 'AGENTS.md'
   schedule:
     - cron: '17 */6 * * *'
   workflow_dispatch:
@@ -55,6 +65,8 @@ jobs:
               arguments += ['--sqlite-tag', os.environ['SQLITE_TAG']]
           subprocess.run(arguments, check=True)
           PY
+      - name: Require the locked candidate to match canonical runtime source
+        run: python3 tools/wplite.py verify --overlay
       - name: Check candidate status
         id: candidate
         run: |
@@ -71,7 +83,7 @@ jobs:
         if: steps.candidate.outputs.ready == 'true'
         run: |
           python3 -m unittest discover -s tests -v
-          python3 tools/wplite.py verify
+          python3 tools/wplite.py verify --overlay
       - name: Prepare isolated test PHP
         if: steps.candidate.outputs.ready == 'true'
         run: python3 tools/prepare_test_runtime.py

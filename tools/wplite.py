@@ -17,7 +17,6 @@ from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
-import tarfile
 import tempfile
 import urllib.error
 import urllib.parse
@@ -107,7 +106,10 @@ def write_json(path: Path, data: dict) -> None:
 
 
 def load_lock(path: Path) -> dict:
-    data = json.loads(path.read_text())
+    return validate_lock(json.loads(path.read_text()))
+
+
+def validate_lock(data: dict) -> dict:
     try:
         if data["format"] != 1:
             raise Error("Unsupported dependency lock format")
@@ -272,19 +274,51 @@ def driver_files(payload: bytes, expected_sha: str) -> dict[str, bytes]:
     return files
 
 
-def overlay(repo: Path, root: Path, lock: dict) -> None:
-    paths = []
-    official = set(git(repo, "ls-tree", "-r", "--name-only", lock["wordpress"]["commit"]).splitlines())
+def runtime_files(root: Path) -> dict[str, bytes]:
+    files = {}
     for source in sorted((root / "runtime" / "root").rglob("*")):
+        if source.is_symlink():
+            raise Error("Runtime overlays must not contain symbolic links")
         if source.is_file():
             relative = source.relative_to(root / "runtime" / "root").as_posix()
             if relative in SITE_ONLY_FILES or relative == "wplite/distribution.json":
                 raise Error(f"Site credentials/state or generated manifest must never enter an overlay: {relative}")
             if not any(relative == p or relative.startswith(p + "/") for p in MANAGED_ROOTS):
                 raise Error(f"Overlay attempts to modify an unmanaged path: {relative}")
-            if relative in official:
-                raise Error(f"Overlay would overwrite an official core file: {relative}")
-            paths.append((relative, source.read_bytes()))
+            if relative.startswith("wplite/vendor/sqlite/"):
+                raise Error("SQLite vendor files must come from the pinned official archive")
+            files[relative] = source.read_bytes()
+    return files
+
+
+def fingerprint(files: dict[str, bytes], wplite_version: str | None = None) -> str:
+    identity = {"format": 1, "files": {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}}
+    if wplite_version is not None:
+        identity["wplite_version"] = wplite_version
+    return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def source_identity(repo: Path, commit: str, lock: dict) -> dict:
+    files = source_files(repo, commit, ("runtime/root", "tools", "tests", ".github/workflows",
+                                      "upstream.lock.json", ".gitattributes", "AGENTS.md"))
+    recorded = validate_lock(json.loads(files["upstream.lock.json"]))
+    if any(recorded[key] != lock[key] for key in ("format", "wplite_version")):
+        raise Error("Candidate distribution version does not match its source main")
+    overlay_files = {name.removeprefix("runtime/root/"): data for name, data in files.items() if name.startswith("runtime/root/")}
+    validation = {name: data for name, data in files.items() if name.startswith(("tools/", "tests/", ".github/workflows/"))
+                  or name in (".gitattributes", "AGENTS.md")}
+    if not overlay_files:
+        raise Error("Source commit has no canonical runtime overlay")
+    return {"overlay_sha256": fingerprint(overlay_files, lock["wplite_version"]),
+            "validation_sha256": fingerprint(validation)}
+
+
+def overlay(repo: Path, root: Path, lock: dict) -> None:
+    paths = list(runtime_files(root).items())
+    official = set(git(repo, "ls-tree", "-r", "--name-only", lock["wordpress"]["commit"]).splitlines())
+    for relative, _ in paths:
+        if relative in official:
+            raise Error(f"Overlay would overwrite an official core file: {relative}")
     cache = root / ".cache" / "downloads" / (lock["sqlite"]["sha256"] + ".zip")
     if cache.exists():
         payload = cache.read_bytes()
@@ -386,12 +420,20 @@ def finish_candidate(root: Path, lock_path: Path, candidate: Path, state: dict) 
     overlay(candidate, root, new_lock)
     commit = git(candidate, "rev-parse", "HEAD")
     new_lock["integration"] = {"commit": commit, "branch": state["branch"]}
-    verify_integration(candidate, new_lock)
+    files = verify_integration(candidate, new_lock)
+    digest = verify_overlay(root, new_lock, files)
+    try:
+        source_commit = git(root, "rev-parse", "--verify", "HEAD")
+    except Error:
+        # Local first-time bootstrapping may precede main's first commit. Such
+        # candidates remain buildable, but the publisher requires a real source.
+        source_commit = None
     # Import only the tested candidate ref; do not move or rebase main.
     git(root, "fetch", "--no-tags", str(candidate), f"HEAD:refs/heads/{state['branch']}")
     write_json(lock_path, new_lock)
     result = {k: v for k, v in state.items() if k not in ("root", "lock_sha256")}
-    result.update(status="candidate", candidate=str(candidate), commit=commit)
+    result.update(status="candidate", candidate=str(candidate), commit=commit,
+                  source_commit=source_commit, overlay_sha256=digest)
     write_json(root / ".cache" / "sync-result.json", result)
     return result
 
@@ -412,19 +454,39 @@ def resume(root: Path, lock_path: Path, candidate: Path) -> dict:
     return finish_candidate(root, lock_path, candidate, state)
 
 
-def source_files(repo: Path, commit: str) -> dict[str, bytes]:
+def source_files(repo: Path, commit: str, paths: tuple[str, ...] = ()) -> dict[str, bytes]:
     if not SHA.fullmatch(commit):
         raise Error("Source commit must be a full SHA")
+    # Read literal tree blobs. git archive honors export-ignore/export-subst,
+    # which must not hide a core file or alter the source being fingerprinted.
+    entries = []
+    for record in git_bytes(repo, "ls-tree", "-rz", "--full-tree", commit, "--", *paths).split(b"\0"):
+        if not record:
+            continue
+        header, name = record.split(b"\t", 1)
+        mode, kind, sha = header.decode().split()
+        relative = name.decode("utf-8")
+        safe_member(relative)
+        if mode not in ("100644", "100755") or kind != "blob" or not SHA.fullmatch(sha):
+            raise Error(f"Unsupported source member: {relative}")
+        entries.append((relative, sha))
+    process = subprocess.run(["git", "-C", str(repo), "cat-file", "--batch"],
+                             input="".join(sha + "\n" for _, sha in entries).encode(), capture_output=True)
+    if process.returncode:
+        raise Error(process.stderr.decode(errors="replace"))
+    stream = io.BytesIO(process.stdout)
     files = {}
-    stream = git_bytes(repo, "archive", "--format=tar", commit)
-    with tarfile.open(fileobj=io.BytesIO(stream)) as archive:
-        for entry in archive:
-            safe_member(entry.name)
-            if entry.isdir():
-                continue
-            if not entry.isfile():
-                raise Error(f"Unsupported source member: {entry.name}")
-            files[entry.name] = archive.extractfile(entry).read()
+    for name, sha in entries:
+        fields = stream.readline().decode().split()
+        if len(fields) != 3 or fields[:2] != [sha, "blob"] or not fields[2].isdigit():
+            raise Error("Invalid Git blob response")
+        size = int(fields[2])
+        data = stream.read(size)
+        if len(data) != size or stream.read(1) != b"\n":
+            raise Error("Incomplete Git blob response")
+        files[name] = data
+    if stream.read():
+        raise Error("Unexpected trailing Git blob response")
     return files
 
 
@@ -489,6 +551,22 @@ def build(root: Path, lock_path: Path, output: Path) -> dict:
     return {"archive": str(target), "sha256": digest, "files": len(files)}
 
 
+def integration_overlay(files: dict[str, bytes], lock: dict) -> str:
+    manifest = json.loads(files["wplite/distribution.json"])
+    if manifest.get("file_manifest_version") != 1:
+        raise Error("Overlay freshness requires a complete file manifest; explicitly refresh the overlay")
+    own = {name: files[name] for name in manifest["files"] if not name.startswith("wplite/vendor/sqlite/")}
+    return fingerprint(own, lock["wplite_version"])
+
+
+def verify_overlay(root: Path, lock: dict, files: dict[str, bytes] | None = None) -> str:
+    actual = integration_overlay(verify_integration(root, lock) if files is None else files, lock)
+    expected = fingerprint(runtime_files(root), lock["wplite_version"])
+    if actual != expected:
+        raise Error("Locked integration contains a stale or different canonical overlay; run sync --refresh-overlay explicitly")
+    return actual
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
@@ -504,7 +582,8 @@ def main() -> int:
     command.add_argument("--candidate", type=Path, required=True)
     command = commands.add_parser("build", help="Build a reproducible ZIP from the locked integration")
     command.add_argument("--output", type=Path)
-    commands.add_parser("verify", help="Verify integration contents and core parity")
+    command = commands.add_parser("verify", help="Verify integration contents and core parity")
+    command.add_argument("--overlay", action="store_true", help="Also require the locked runtime to match canonical source (CI gate)")
     args = parser.parse_args()
     root = args.root.resolve()
     lock_path = args.lock or root / "upstream.lock.json"
@@ -528,6 +607,8 @@ def main() -> int:
         else:
             files = verify_integration(root, lock)
             result = {"status": "verified", "files": len(files), "core": lock["wordpress"]["tag"]}
+            if args.overlay:
+                result["overlay_sha256"] = verify_overlay(root, lock, files)
         print(json.dumps(result, indent=2))
         return 0
     except (Error, OSError, ValueError, urllib.error.URLError, zipfile.BadZipFile) as exc:
