@@ -24,6 +24,10 @@
   PDO SQLite, a patched SQLite build, and no mysqli/pdo_mysql extensions.
 - Never send email or call external payment/network services from tests. The
   offline test MU plugin must never enter a distributable artifact.
+- Before adding third-party plugin execution to CI, isolate candidate tests from
+  the repository-write publisher in separate execution environments/jobs and
+  validate the artifact handoff against trusted source. Supplying GH_TOKEN only
+  in the final step is not isolation from earlier code in the same runner job.
 - Preserve user data and Git work. `.cache/` and `dist/` are generated; source
   archives, compiler logs and candidate conflict state remain useful evidence.
 - Current local proof covers PHP 8.4 only. Do not claim a live GitHub workflow,

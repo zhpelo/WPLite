@@ -110,8 +110,14 @@ backups/rollback 前缀，不仅是相似后缀的随机文件。
 拒绝、尚无首次 main 提交的本地引导，以及显式 canonical overlay 检查拒绝陈旧
 集成而普通本地构建仍只读取锁定 SHA。发行内容未变化，5070 个文件及 ZIP
 SHA-256 仍为上一节的 `66b800cbc969324a3b033ae69c542e83cc6d50e6672d77dab78be5e27ae9be8e`。
-完整 SQLite smoke 与真实 Web/Apache 套件也再次执行。两条工作流已加入新门槛，
-本轮远程运行证据需与前述历史 CI 分开确认。
+完整 SQLite smoke 与真实 Web/Apache 套件也再次通过。本轮工具提交为
+`31eba155af6585b329d51c0b4a6fbb924a1e5a12`，真实运行记录：
+
+- [Validate WPLite #38726705890](https://github.com/zhpelo/WPLite/actions/runs/38726705890)：成功，44 项工具测试、canonical overlay 门槛、完整安装与 Web/Apache 套件及构建上传均通过。
+- [Sync official stable tags #38726705842](https://github.com/zhpelo/WPLite/actions/runs/38726705842)：由 main 输入变化的 push 实际触发并成功，确认当前无更新且 canonical overlay 匹配，未创建空 PR。
+
+当前测试及发布仍在同一 runner job，末步注入 token 不等于隔离；在执行第三方
+插件代码前必须拆分验证/发布权限。尚未把当前工作流认定为生产级供应链隔离。
 
 ## 证据边界
 
