@@ -96,6 +96,29 @@ SQLite 驱动：https://github.com/WordPress/sqlite-database-integration
 工具与集成分支均需推送到项目自己的 origin；启用 Actions 并允许工作流创建 PR。
 自动候选为草稿，必须经过维护者审核，不自动合并或发布。
 
+同步工作流拆成三个全新 Ubuntu runner 作业，禁止共享工作区或恢复测试作业缓存：
+
+1. `discover` 只有 `contents: read`。从当前工作流的固定 main SHA 读取工具，发现并
+   rebase 官方稳定标签。执行的只有可信工具，不加载候选 PHP/插件。上传固定格式
+   的 JSON 和候选 Git bundle；无更新时只上传 JSON。
+2. `validate` 只有 `contents: read`。按 discovery 输出的不可变 artifact ID 下载，
+   用独立输出的 manifest SHA-256 核验，再绑定仓库、source SHA、run ID 和 attempt。
+   独立核对官方核心、完整系统组件和驱动归档，导入固定候选后才运行安装及插件测试。
+   测试产物只是审查证据，不作为发布输入。
+3. `publish` 等前两者成功后，在全新 runner 获取唯一的 `contents: write`、
+   `pull-requests: write`。只下载 discovery 的同一个 artifact ID，再次核对交接
+   数据及官方字节；不加载 PHP、主题、插件，不接收 validate 的 ZIP、代码或缓存。
+   来源和版本检查通过后，既有发布器才可创建草稿 PR 或处理旧候选。
+
+所有 checkout 固定 `${{ github.sha }}` 且不保存凭据。交接 JSON 的自报摘要不是
+信任来源：期待摘要必须来自 discovery 的作业输出。Git bundle 只允许一个固定
+候选引用，依赖官方基础提交；拒绝多引用、额外文件、符号链接、跨运行重放、降级、
+同标签元数据替换和缺少显式批准的跨系列升级。自洽文件清单不替代驱动归档字节
+对照。无更新也走三个作业的交接检查，但不运行候选 PHP 测试、不修改远端。
+
+这隔离了仓库写凭据，不表示不可信插件已获得通用安全沙箱：插件测试仍需要离线
+网络/邮件/支付隔离，成功的测试状态也不等于生产发布、商店认证或签名升级。
+
 GitHub 默认不会为 GITHUB_TOKEN 创建的 PR 触发另一次 pull_request 工作流。
 本同步工作流在创建 PR 前已经验证候选，并上传测试产物；若分支保护要求 PR
 自己的 CI 状态，可在 Actions 中对对应 bot 分支手动运行 Validate WPLite。

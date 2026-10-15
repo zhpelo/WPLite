@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import urllib.request
+from sync_handoff import verify_receipt
 
 from wplite import (ROOT, Error, SHA, git, git_bytes, load_lock, validate_lock, version,
                     verify_integration, verify_overlay, integration_overlay, source_identity)
@@ -173,6 +174,7 @@ def publish():
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository):
         raise Error('Invalid GitHub repository identity')
     token = os.environ['GH_TOKEN']
+    verify_receipt(ROOT)
     result = json.loads((ROOT / '.cache/sync-result.json').read_text())
     if result['status'] != 'candidate':
         print('No new integration candidate; no remote changes.')

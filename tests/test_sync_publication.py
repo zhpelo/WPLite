@@ -5,6 +5,7 @@ import copy
 import io
 import json
 import os
+import shutil
 from pathlib import Path
 import sys
 import unittest
@@ -15,6 +16,7 @@ import test_tooling
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 import wplite as w
 import publish_sync_pr as publisher
+import sync_handoff as handoff
 
 
 class PublicationFlowTest(unittest.TestCase):
@@ -36,6 +38,7 @@ class PublicationFlowTest(unittest.TestCase):
         patches = [mock.patch.object(publisher, 'ROOT', self.root),
                    mock.patch.object(publisher, 'git', side_effect=self.transport),
                    mock.patch.object(publisher, 'api', side_effect=self.api),
+                   mock.patch.object(publisher, 'verify_receipt'),
                    mock.patch.dict(os.environ, {'GITHUB_ACTIONS': 'true', 'GITHUB_EVENT_NAME': 'schedule',
                        'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'example/WPLite', 'GH_TOKEN': 'test-only-token'})]
         for patch in patches:
@@ -114,6 +117,25 @@ class PublicationFlowTest(unittest.TestCase):
         self.assertIn('Existing verified candidate', self.publish())
         self.assertEqual(len(self.prs), 1)
         self.assertEqual(w.git(self.remote, 'show-ref'), refs)
+        self.assertEqual(w.git(self.remote, 'rev-parse', 'refs/heads/main'), source)
+
+    def test_publisher_consumes_discovery_handoff_in_a_fresh_repository(self):
+        self.candidate()
+        source = w.git(self.root, 'rev-parse', 'HEAD')
+        with mock.patch.dict(os.environ, {'GITHUB_SHA': source, 'GITHUB_RUN_ID': '123',
+                'GITHUB_RUN_ATTEMPT': '1', 'APPROVE_SERIES': 'false'}):
+            directory = self.root / '.cache/sync-handoff'
+            output = handoff.export_handoff(self.root, directory)
+            fresh = self.fixture.directory / 'isolated-publisher'
+            w.git(self.root, 'clone', '--no-local', '--single-branch', '--branch', 'main', str(self.remote), str(fresh))
+            w.git(fresh, 'remote', 'add', 'upstream', str(self.fixture.upstream))
+            shutil.copytree(directory, fresh / '.cache/sync-handoff')
+            with mock.patch.dict(os.environ, {'WPLITE_HANDOFF_SHA256': output['handoff_sha256']}):
+                handoff.import_handoff(fresh, fresh / '.cache/sync-handoff')
+                with mock.patch.object(publisher, 'ROOT', fresh), \
+                        mock.patch.object(publisher, 'verify_receipt', wraps=handoff.verify_receipt):
+                    self.assertIn('Created draft sync PR', self.publish())
+        self.assertTrue(self.prs[1]['draft'])
         self.assertEqual(w.git(self.remote, 'rev-parse', 'refs/heads/main'), source)
 
     def test_runtime_change_replaces_same_versions_and_ignores_forged_body(self):

@@ -36,18 +36,24 @@ permissions:
   contents: read
 
 jobs:
-  candidate:
+  discover:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 20
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+    outputs:
+      ready: ${{ steps.seal.outputs.ready }}
+      handoff_sha256: ${{ steps.seal.outputs.handoff_sha256 }}
+      artifact_id: ${{ steps.handoff.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Name the pinned source checkout
+        run: git switch -c main
       - name: Discover and rebase only official stable tags
         env:
           WPLITE_GITHUB_API_TOKEN: ${{ github.token }}
@@ -68,28 +74,55 @@ jobs:
           PY
       - name: Require the locked candidate to match canonical runtime source
         run: python3 tools/wplite.py verify --overlay
-      - name: Check candidate status
-        id: candidate
-        run: |
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          result = json.loads(Path('.cache/sync-result.json').read_text())
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              print('ready=' + str(result['status'] == 'candidate').lower(), file=output)
-          if result.get('next_series'):
-              print('New stable series available; manual approval required: ' + result['next_series'])
-          PY
+      - name: Seal data-only discovery handoff before any candidate code executes
+        id: seal
+        env:
+          APPROVE_SERIES: ${{ inputs.approve_series }}
+        run: python3 tools/sync_handoff.py export
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        id: handoff
+        with:
+          name: wplite-discovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .cache/sync-handoff/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  validate:
+    needs: discover
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Name the pinned source checkout
+        run: git switch -c main
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.discover.outputs.artifact_id }}
+          path: .cache/sync-handoff/
+          merge-multiple: true
+      - name: Verify source-bound discovery data and import only pinned Git objects
+        env:
+          WPLITE_HANDOFF_SHA256: ${{ needs.discover.outputs.handoff_sha256 }}
+          WPLITE_GITHUB_API_TOKEN: ${{ github.token }}
+          APPROVE_SERIES: ${{ inputs.approve_series }}
+        run: python3 tools/sync_handoff.py import
       - name: Test tooling and source parity
-        if: steps.candidate.outputs.ready == 'true'
+        if: needs.discover.outputs.ready == 'true'
         run: |
           python3 -m unittest discover -s tests -v
           python3 tools/wplite.py verify --overlay
       - name: Prepare isolated test PHP
-        if: steps.candidate.outputs.ready == 'true'
+        if: needs.discover.outputs.ready == 'true'
         run: python3 tools/prepare_test_runtime.py
       - name: Verify installation, HTTP behavior and reproducible build
-        if: steps.candidate.outputs.ready == 'true'
+        if: needs.discover.outputs.ready == 'true'
         run: |
           .cache/test-runtime/install/bin/php tests/environment.php
           python3 tests/smoke.py --php .cache/test-runtime/install/bin/php
@@ -97,7 +130,7 @@ jobs:
           python3 tests/diagnostics.py --php .cache/test-runtime/install/bin/php
           python3 tools/wplite.py build
       - name: Record rebase comparison
-        if: steps.candidate.outputs.ready == 'true'
+        if: needs.discover.outputs.ready == 'true'
         run: |
           python3 - <<'PY'
           import json, subprocess
@@ -106,14 +139,44 @@ jobs:
           subprocess.run(['git', 'range-diff', r['old_base'] + '..' + r['previous_integration'], r['new_base'] + '..' + r['commit']], check=True)
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: steps.candidate.outputs.ready == 'true'
+        if: needs.discover.outputs.ready == 'true'
         with:
           name: wplite-sync-candidate
           path: dist/
           retention-days: 14
           if-no-files-found: error
+
+  publish:
+    needs: [discover, validate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Name the pinned source checkout
+        run: git switch -c main
+      # Only discovery's immutable artifact ID is accepted. Never download the
+      # validation runner's ZIP, Git state, caches, tools or arbitrary receipts.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.discover.outputs.artifact_id }}
+          path: .cache/sync-handoff/
+          merge-multiple: true
+      - name: Independently verify trusted data without executing candidate PHP
+        env:
+          WPLITE_HANDOFF_SHA256: ${{ needs.discover.outputs.handoff_sha256 }}
+          WPLITE_GITHUB_API_TOKEN: ${{ github.token }}
+          APPROVE_SERIES: ${{ inputs.approve_series }}
+        run: python3 tools/sync_handoff.py import
       - name: Publish candidate and draft sync PR
-        if: steps.candidate.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          WPLITE_HANDOFF_SHA256: ${{ needs.discover.outputs.handoff_sha256 }}
+          APPROVE_SERIES: ${{ inputs.approve_series }}
         run: python3 tools/publish_sync_pr.py
