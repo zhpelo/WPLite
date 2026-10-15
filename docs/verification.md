@@ -139,7 +139,23 @@ WAL 逻辑页数、报告白名单以及没有默认周期探针。私有路径�
 
 当前本地集成为 `c15f409911dacf4fa11973f7a97868ade006ab17`，5073 个文件，ZIP
 SHA-256 为 `570b6e8b29dd149edbdfb51cee62b7fe0e402982a0a6238e7aff333d33875b4f`。
-这是本轮本地证据；远端诊断步骤的运行记录需单独核对，不复用之前 CI 的结论。
+工具提交 `be4733d021bd3bf61a0d310b4252301e588276bd` 的远端运行已核对：
+
+- [Validate WPLite #38732188333](https://github.com/zhpelo/WPLite/actions/runs/38732188333)：44 项工具测试、完整 SQLite smoke、真实 Apache 存储保护及新增诊断/Cron 步骤全部成功；Ubuntu 产物 SHA-256 与上述本地构建相同。
+- [Sync official stable tags #38732188363](https://github.com/zhpelo/WPLite/actions/runs/38732188363)：成功，确认当前核心/驱动无更新、overlay 匹配；发布步骤跳过，没有创建空 PR。
+
+## 同步元数据请求限流修正
+
+历史同步 [#38727400603](https://github.com/zhpelo/WPLite/actions/runs/38727400603)
+在官方依赖发现阶段遇到 GitHub 匿名 API 限流而失败。两条工作流现在仅在可信
+元数据步骤设置 `WPLITE_GITHUB_API_TOKEN`；请求只向固定社区驱动仓库的稳定
+Release 元数据接口附加认证。归档、WordPress.org 校验接口和其他地址均不附加，
+所有重定向（包括同主机）移除认证，HTTP 降级在请求前拒绝。没有扩大工作流权限，
+也不把该变量传给候选 PHP/插件测试步骤；这仍不替代后续的独立发布作业隔离。
+
+本地 47 项工具测试全部通过，新增认证接口白名单、匿名模式、重定向移除认证及
+HTTPS/大小限制回归。认证不保证永不限流，仍保留 API 错误时停止、不绕过固定
+SHA/摘要检查的行为。该修正的远端 CI 结果应按其后续提交单独确认。
 
 ## 证据边界
 

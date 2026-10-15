@@ -2,6 +2,7 @@ import copy
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import shutil
@@ -66,6 +67,51 @@ class StableTagsTest(unittest.TestCase):
                 w.write_json(file, lock)
                 with self.subTest(key=key), self.assertRaises(w.Error):
                     w.load_lock(file)
+
+
+class DownloadTest(unittest.TestCase):
+    def request(self, url, token='fixture-not-a-secret', maximum=64):
+        response = io.BytesIO(b'fixture payload')
+        response.url = url
+        with mock.patch.dict(os.environ, {'WPLITE_GITHUB_API_TOKEN': token}), \
+                mock.patch.object(w.urllib.request, 'build_opener') as opener:
+            opener.return_value.open.return_value = response
+            result = w.download(url, maximum=maximum)
+        self.assertEqual(result, b'fixture payload')
+        self.assertIsInstance(opener.call_args.args[0], w.SafeDownloadRedirect)
+        self.assertEqual(opener.return_value.open.call_args.kwargs, {'timeout': 60})
+        return opener.return_value.open.call_args.args[0]
+
+    def test_authentication_is_optional_and_limited_to_driver_release_metadata(self):
+        for endpoint in ('latest', 'tags/v3.1.0'):
+            with self.subTest(endpoint=endpoint):
+                self.assertEqual(self.request(w.SQLITE_RELEASE_API + endpoint).get_header('Authorization'),
+                                 'Bearer fixture-not-a-secret')
+        self.assertIsNone(self.request(w.SQLITE_RELEASE_API + 'latest', token='').get_header('Authorization'))
+        for url in ('https://api.github.com.evil.invalid/repos/WordPress/sqlite-database-integration/releases/latest',
+                    'https://api.github.com/repos/other/repo/releases/latest',
+                    w.SQLITE_RELEASE_API + '../issues', w.SQLITE_RELEASE_API + 'latest?redirect=1',
+                    'https://github.com/WordPress/sqlite-database-integration/releases/download/v3.1.0/plugin-sqlite-database-integration.zip',
+                    'https://api.wordpress.org/core/checksums/1.0/', 'https://www.sqlite.org/source.zip'):
+            with self.subTest(url=url):
+                self.assertIsNone(self.request(url).get_header('Authorization'))
+
+    def test_redirects_strip_authorization_even_on_same_host_and_reject_tls_downgrade(self):
+        request = w.urllib.request.Request(w.SQLITE_RELEASE_API + 'latest', headers={'Authorization': 'Bearer fixture'})
+        handler = w.SafeDownloadRedirect()
+        for url in (w.SQLITE_RELEASE_API + 'tags/v3.1.0', 'https://release-assets.githubusercontent.com/file.zip'):
+            with self.subTest(url=url):
+                redirected = handler.redirect_request(request, None, 302, 'Found', {}, url)
+                self.assertIsNone(redirected.get_header('Authorization'))
+        with self.assertRaisesRegex(w.Error, 'Insecure download redirect'):
+            handler.redirect_request(request, None, 302, 'Found', {}, 'http://example.invalid/file')
+
+    def test_download_size_and_https_requirements_remain_enforced(self):
+        with self.assertRaisesRegex(w.Error, 'size limit'):
+            self.request('https://example.invalid/file', maximum=3)
+        with mock.patch.object(w.urllib.request, 'build_opener') as opener, self.assertRaises(w.Error):
+            w.download('http://example.invalid/file')
+        opener.assert_not_called()
 
 
 class ArchiveTest(unittest.TestCase):

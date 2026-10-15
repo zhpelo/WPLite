@@ -50,6 +50,7 @@ jobs:
           fetch-depth: 0
       - name: Discover and rebase only official stable tags
         env:
+          WPLITE_GITHUB_API_TOKEN: ${{ github.token }}
           REQUESTED_TAG: ${{ inputs.tag }}
           APPROVE_SERIES: ${{ inputs.approve_series }}
           SQLITE_TAG: ${{ inputs.sqlite_tag }}

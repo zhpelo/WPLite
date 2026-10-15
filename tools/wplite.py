@@ -139,11 +139,26 @@ def validate_lock(data: dict) -> dict:
     return data
 
 
+class SafeDownloadRedirect(urllib.request.HTTPRedirectHandler):
+    """Never forward repository credentials or follow a TLS downgrade."""
+
+    def redirect_request(self, request, fp, code, message, headers, new_url):
+        if not new_url.startswith("https://"):
+            raise Error("Insecure download redirect")
+        redirected = super().redirect_request(request, fp, code, message, headers, new_url)
+        if redirected is not None:
+            redirected.remove_header("Authorization")
+        return redirected
+
+
 def download(url: str, maximum: int = MAX_ARCHIVE) -> bytes:
     if not url.startswith("https://"):
         raise Error("Only HTTPS downloads are allowed")
     request = urllib.request.Request(url, headers={"User-Agent": "WPLite-maintainer/0.1"})
-    with urllib.request.urlopen(request, timeout=60) as response:
+    token = os.environ.get("WPLITE_GITHUB_API_TOKEN")
+    if token and re.fullmatch(re.escape(SQLITE_RELEASE_API) + r"(?:latest|tags/v[0-9]+\.[0-9]+\.[0-9]+)", url):
+        request.add_header("Authorization", "Bearer " + token)
+    with urllib.request.build_opener(SafeDownloadRedirect()).open(request, timeout=60) as response:
         if not response.url.startswith("https://"):
             raise Error("Insecure download redirect")
         payload = response.read(maximum + 1)
