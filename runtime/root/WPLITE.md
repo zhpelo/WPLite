@@ -70,6 +70,49 @@ web-server/CDN rules still require manual HTTP protection revalidation.
 Full instructions and the local key tool:
 https://github.com/zhpelo/WPLite/blob/main/docs/web-install.md
 
+## Operational diagnostics and Cron (development)
+
+The administrator-only Tools → WPLite diagnostics page reports current runtime,
+SQLite connection policy, storage configuration, disk headroom and a one-shot
+Cron observation. It does not expose private paths, site IDs, salts or backup
+keys. Version and disk information are still operational data; review exports
+before sharing. Full database scanning is not performed on an ordinary page view.
+
+```sh
+php wplite/cli.php doctor
+php wplite/cli.php doctor --data-dir /private/site --integrity quick
+php wplite/cli.php doctor-site --integrity quick
+php wplite/cli.php cron-probe --transport schedule
+php wplite/cli.php cron-status --require-execution yes
+```
+
+`doctor --data-dir` works without loading WordPress, opens only an existing
+database in read-only mode and never creates a replacement database. SQLite may
+maintain read-coordination sidecars when reading a live WAL database. During
+maintenance this report avoids opening the database. `doctor-site` loads the
+ordinary WordPress environment and therefore may run normal plugin/load hooks.
+Only explicit `--integrity quick` requests run SQLite quick_check.
+
+Cron configuration is not execution evidence. A probe is a single non-recurring
+event; it is not scheduled automatically and its option is not autoloaded. Let
+your existing scheduler execute it, or explicitly choose loopback. That option
+requests the canonical site's wp-cron.php with TLS verification and no redirects,
+and **can execute all due WordPress tasks**, not just this diagnostic. A successful
+HTTP response alone never proves event execution. Refresh the page or poll status.
+
+DISABLE_WP_CRON only disables traffic triggering; an external scheduler may still
+run `php wp-cron.php`. A real event records whether it ran through CLI or HTTP.
+Late execution and stale-release observations are identified separately. An old
+observation is not current evidence; neither a single success nor a configuration
+flag proves recurring scheduler reliability or commerce compatibility. The basic
+content/configuration result and commerce certification are separate; commerce
+remains unverified in this development release.
+
+Protected public storage reports its installation-time HTTP verification and the
+current deny-file hash, not a new server/CDN protection test. Recheck externally
+after changing server rules. Full diagnostics instructions:
+https://github.com/zhpelo/WPLite/blob/main/docs/diagnostics.md
+
 ## Database backup and recovery (development CLI)
 
 ```sh

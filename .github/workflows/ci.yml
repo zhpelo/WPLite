@@ -41,6 +41,8 @@ jobs:
         run: >-
           python3 tests/web_install.py --php .cache/test-runtime/install/bin/php
           --httpd /usr/sbin/apache2 --apache-modules /usr/lib/apache2/modules
+      - name: Verify independent diagnostics, authorization and real Cron execution
+        run: python3 tests/diagnostics.py --php .cache/test-runtime/install/bin/php
       - name: Build installable ZIP
         run: python3 tools/wplite.py build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

@@ -14,7 +14,7 @@
     "sha256": "02a7958a27959c00f2d579ea27f2047ad2fe6a2c4758c2459d36d0b0ae0b6624"
   },
   "integration": {
-    "commit": "24f6029ad44d18375d9ffe21acca8deaaff032aa",
-    "branch": "sync/wp-7.1.3-5uf2paqg"
+    "commit": "c15f409911dacf4fa11973f7a97868ade006ab17",
+    "branch": "sync/wp-7.1.3-qa1w_we5"
   }
 }

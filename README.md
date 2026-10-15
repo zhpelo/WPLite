@@ -67,6 +67,7 @@ python3 tools/prepare_test_runtime.py
 - [交付路线与完成证据](docs/roadmap.md)
 - [上游同步操作](docs/upstream-sync.md)
 - [Web 安装与数据目录保护](docs/web-install.md)
+- [运行诊断与 Cron 执行证据](docs/diagnostics.md)
 - [本地与 GitHub 验证记录及尚未验证的范围](docs/verification.md)
 
 ## 启用 GitHub 工作流
