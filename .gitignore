@@ -10,3 +10,4 @@ webroot/wp-content/mu-plugins/*
 !/webroot/wp-content/mu-plugins/wplite.php
 !/webroot/wp-content/mu-plugins/wplite/
 !/webroot/wp-content/db.php
+*.zip

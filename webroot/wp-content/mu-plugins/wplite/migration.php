@@ -265,16 +265,43 @@ final class Migration
     {
         require_once __DIR__ . '/environment.php'; Environment::requireSupported();
         $public = realpath($_SERVER['DOCUMENT_ROOT'] ?? '');
-        if (!$public || !Environment::isWithin(rtrim(ABSPATH, '/'), $public)) { throw new \RuntimeException('无法确认网站公开目录。'); }
-        $parent = realpath(dirname($public));
-        if (!$parent || !is_writable($parent)) { throw new \RuntimeException('迁移需要网站公开目录外的可写私有目录；当前主机不满足要求，未修改原站点。'); }
-        $directory = $parent . '/wplite-data-' . bin2hex(random_bytes(8));
-        if (Environment::isWithin($directory, $public) || !mkdir($directory, 0700)) { throw new \RuntimeException('无法创建私有迁移目录。'); }
+        $root = realpath(rtrim(ABSPATH, '/'));
+        if (!$public || !$root || !Environment::isWithin($root, $public)) { throw new \RuntimeException('无法确认网站公开目录。'); }
+        $private = null;
+        $home = isset($_SERVER['HOME']) && is_string($_SERVER['HOME']) ? $_SERVER['HOME'] : (string) getenv('HOME');
+        foreach ([dirname($public), dirname($public) . '/private', $home] as $candidate) {
+            if ($candidate === '' || $candidate === '/') { continue; }
+            $candidate = @realpath($candidate);
+            if ($candidate && is_dir($candidate) && is_writable($candidate)
+                && !Environment::isWithin($candidate, $public)) {
+                $private = $candidate;
+                break;
+            }
+        }
+        $protected = $private === null;
+        if ($protected) {
+            $content = realpath(WP_CONTENT_DIR);
+            if (!$content || $content !== realpath($root . '/wp-content') || is_link($root . '/wp-content') || !is_writable($content)) {
+                throw new \RuntimeException('无法创建私有目录，且默认 wp-content 不适合受保护存储；未修改原站点。');
+            }
+            $directory = $content . '/wplite-data-' . bin2hex(random_bytes(8));
+        } else {
+            $directory = $private . '/wplite-data-' . bin2hex(random_bytes(8));
+        }
+        if ((!$protected && Environment::isWithin($directory, $public)) || !mkdir($directory, 0700)) {
+            throw new \RuntimeException('无法创建 SQLite 迁移目录。');
+        }
+        $result = ['database' => $directory . '/site.sqlite', 'public' => $public];
+        if ($protected) {
+            require_once __DIR__ . '/setup.php';
+            Setup::protectedStorage($root, $directory, rtrim(site_url('', is_ssl() ? 'https' : 'http'), '/'));
+            $result['storage_deny_hash'] = hash('sha256', Setup::DENY);
+        }
         $path = $directory . '/site.sqlite';
         $old = umask(0077);
         try { $pdo = new \PDO('sqlite:' . $path); $pdo->exec('PRAGMA user_version = 0'); $pdo = null; chmod($path, 0600); }
         finally { umask($old); }
-        return ['database' => $path, 'public' => $public];
+        return $result;
     }
 
     public static function handle(): void
@@ -362,7 +389,9 @@ final class Migration
                 require_once __DIR__ . '/setup.php';
                 $helper = dirname($owned['database']) . '/wordpress-sqlite.php';
                 $code = "<?php\n// WPLite: the original MySQL database is retained.\n";
-                foreach (['DB_ENGINE' => 'sqlite', 'DB_PATH' => $owned['database'], 'WPLITE_PUBLIC_ROOT' => $owned['public']] as $name => $value) { $code .= 'define(' . var_export($name, true) . ', ' . var_export($value, true) . ");\n"; }
+                $constants = ['DB_ENGINE' => 'sqlite', 'DB_PATH' => $owned['database'], 'WPLITE_PUBLIC_ROOT' => $owned['public']];
+                if (isset($owned['storage_deny_hash'])) { $constants['WPLITE_STORAGE_DENY_HASH'] = $owned['storage_deny_hash']; }
+                foreach ($constants as $name => $value) { $code .= 'define(' . var_export($name, true) . ', ' . var_export($value, true) . ");\n"; }
                 $code .= 'require_once ' . var_export(__DIR__ . '/bootstrap.php', true) . ";\n";
                 Setup::fresh($helper, $code);
                 $updated = substr_replace($config['code'], 'require_once ' . var_export($helper, true) . ";\n", $config['offset'], 0);

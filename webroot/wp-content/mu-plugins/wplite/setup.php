@@ -50,7 +50,7 @@ final class Setup
         return [(int) $match[1], $response];
     }
 
-    private static function protectedStorage(string $root, string $data, string $url): void
+    public static function protectedStorage(string $root, string $data, string $url): void
     {
         // Fresh challenges, not real data: prove the URL maps to this site and
         // the actual sensitive names are denied before materializing SQLite.
