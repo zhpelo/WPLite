@@ -3,6 +3,19 @@ declare(strict_types=1);
 
 namespace WPLite;
 
+// Some static PHP 8.4+ builds still expose the legacy PDO SQLite API.
+if (PHP_VERSION_ID >= 80400 && class_exists(\PDO::class) && !class_exists('Pdo\Sqlite')
+    && in_array('sqlite', \PDO::getAvailableDrivers(), true)) {
+    final class LegacySQLitePDO extends \PDO
+    {
+        public function createFunction(string $name, callable $callback, int $arguments = -1, int $flags = 0): bool
+        {
+            return $this->sqliteCreateFunction($name, $callback, $arguments, $flags);
+        }
+    }
+    class_alias(LegacySQLitePDO::class, 'Pdo\Sqlite');
+}
+
 /** Small installation/runtime checks; no WordPress dependencies or site state. */
 final class Environment
 {

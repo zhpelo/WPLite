@@ -45,7 +45,7 @@ final class Setup
         $response = @file_get_contents($url, false, $context, 0, 4096);
         if ($response === false || !isset($http_response_header[0])
             || !preg_match('~^HTTP/\S+ ([0-9]{3})~', $http_response_header[0], $match)) {
-            throw new \RuntimeException('主机不能完成本站 HTTP(S) 安全验证。请使用网站公开目录之外的私有数据库路径。');
+            throw new \RuntimeException('主机不能完成本站 HTTP(S) 安全验证。请让主机开放网站公开目录外的父目录写入权限，或改用 MySQL。');
         }
         return [(int) $match[1], $response];
     }
@@ -70,7 +70,7 @@ final class Setup
                 $created[] = $data . '/' . $path;
                 [$status, $body] = self::get($url . $relative . '/' . rawurlencode($path));
                 if (!in_array($status, [403, 404], true) || str_contains($body, $token)) {
-                    throw new \RuntimeException('服务器没有可靠禁止下载数据库。已拒绝安装；请改用私有目录或由主机配置访问禁止规则。');
+                    throw new \RuntimeException('服务器没有可靠禁止下载数据库。已拒绝安装；请让主机配置访问禁止规则或开放公开目录外的父目录写入权限，或改用 MySQL。');
                 }
             }
         } finally {
@@ -96,23 +96,11 @@ final class Setup
             || !str_contains((string) file_get_contents($dropin), 'WPLITE_SQLITE_DROPIN_V3')) {
             throw new \RuntimeException('安装文件不完整。请上传已包含 SQLite 驱动的完整安装包，无需运行 Python 或服务器下载。');
         }
-        $mode = $input['storage'] ?? 'auto';
-        $requested = trim($input['data-dir'] ?? '');
-        if (!in_array($mode, ['auto', 'private', 'protected'], true)) {
-            throw new \RuntimeException('请选择有效的数据库存储方式。');
-        }
+        // Storage is automatic; never accept a filesystem path from the browser.
         $parent = @realpath(dirname($public));
-        if ($requested !== '') {
-            $parent = @realpath(dirname($requested));
-            $leaf = basename($requested);
-            if ($requested[0] !== '/' || in_array($leaf, ['.', '..'], true)) { throw new \RuntimeException('私有目录必须是绝对路径。'); }
-            $data = ($parent ?: '') . '/' . $leaf;
-            $mode = 'private';
-        } elseif ($mode !== 'protected' && $parent !== false && @is_writable($parent)) {
+        if ($parent !== false && @is_writable($parent)) {
             $data = $parent . '/wplite-data-' . bin2hex(random_bytes(8));
             $mode = 'private';
-        } elseif ($mode === 'private') {
-            throw new \RuntimeException('网站根目录外不可写，请通过面板指定可写私有目录，或选择验证过的站内存储。');
         } else {
             $data = $root . '/wp-content/wplite-data-' . bin2hex(random_bytes(8));
             $mode = 'protected';
@@ -173,6 +161,12 @@ final class Setup
                 foreach ($input as $value) {
                     if (!is_string($value) || strlen($value) > 4096) { throw new \RuntimeException('无效的表单数据。'); }
                 }
+                $engine = $input['database'] ?? 'sqlite';
+                if ($engine === 'mysql') {
+                    header('Location: ' . $url . '/wp-admin/setup-config.php?step=1', true, 303);
+                    return;
+                }
+                if ($engine !== 'sqlite') { throw new \RuntimeException('请选择 SQLite 或 MySQL。'); }
                 self::prepare($root, $input, $url);
                 header('Location: ' . $url . '/wp-admin/install.php', true, 303);
                 return;
@@ -188,22 +182,18 @@ final class Setup
         ?>
 <!doctype html>
 <html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WordPress SQLite 配置</title>
+<title>WordPress 数据库配置</title>
 <style>body{font:16px/1.65 system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#17212d}input,select,button{box-sizing:border-box;width:100%;padding:10px;margin:5px 0 14px;font:inherit}.notice{padding:14px;background:#eef4fa}button{background:#235a80;color:white;border:0;cursor:pointer}</style>
-<h1>WordPress SQLite 配置</h1>
+<h1>WordPress 数据库配置</h1>
 <?php if ($error !== null): ?>
 <p class="notice"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
 <p>如已开始写入后失败，请通过主机面板检查本次新建文件和安装锁；不会自动覆盖或删除已有数据。</p>
 <?php else: ?>
-<p>WPLite 使用 SQLite，无需填写 MySQL 账号。配置完成后，将进入 WordPress 官方安装页面设置站点和管理员。</p>
+<p>默认使用 SQLite，无需数据库账号，存储位置自动设置。也可以选择 MySQL，填写已有数据库的连接信息。配置完成后，将进入 WordPress 官方安装页面设置站点和管理员。</p>
 <p class="notice">此入口公开访问，请上传后立即完成全部安装步骤。建议使用 HTTPS。</p>
 <form method="post">
-<details><summary>数据库存储（默认自动选择）</summary>
-<select name="storage"><option value="auto">优先私有目录；不可用时验证站内保护</option><option value="private">仅允许网站公开目录外</option><option value="protected">验证过的站内受保护目录</option></select>
-<label>指定私有目录（可留空，填写时必须是不存在的绝对路径）<input name="data-dir" placeholder="/home/account/private/my-site"></label>
-<p>站内存储仅在服务器真实拒绝数据库下载后启用；不支持该验证的主机需要使用私有目录。</p>
-</details>
-<button type="submit">配置 SQLite，继续安装 WordPress</button>
+<label>数据库类型<select name="database"><option value="sqlite" selected>SQLite（推荐，无需单独的数据库服务）</option><option value="mysql">MySQL</option></select></label>
+<button type="submit">继续安装 WordPress</button>
 </form>
 <?php endif; ?>
 </html>

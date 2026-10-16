@@ -3,7 +3,8 @@
 ## 目标与工作原则
 
 本项目的当前目标是快速上线：不修改 WordPress 核心，用精简 MU 插件和 SQLite
-drop-in 完成全新站点安装。优先交付能直接上传使用的 PHP 文件，不构建发行平台。
+drop-in 完成全新站点安装及管理员明确确认的 MySQL 单站点迁移。
+优先交付能直接上传使用的 PHP 文件，不构建发行平台。
 
 - 只实现用户明确要求的功能；采用能完成任务的最小改动。
 - 不因“以后可能需要”增加抽象、依赖、配置项、管理页面或基础设施。
@@ -17,12 +18,15 @@ drop-in 完成全新站点安装。优先交付能直接上传使用的 PHP 文�
 - `webroot/wp-content/db.php`：随包上传的数据库 drop-in；`WP_SETUP_CONFIG` 阶段直接返回，
   让官方未连接的 wpdb 占位对象继续引导至 MU 插件，正常请求再初始化 SQLite。
 - `webroot/wp-content/mu-plugins/wplite.php`：MU 入口，只在 `WP_SETUP_CONFIG` 阶段接管配置。
-- `webroot/wp-content/mu-plugins/wplite/setup.php`：SQLite 配置页和一次性数据库/配置文件创建逻辑，
-  不在正常请求中加载；完成后转到官方 `wp-admin/install.php`。
+- `webroot/wp-content/mu-plugins/wplite/setup.php`：数据库选择页，默认 SQLite，自动选择安全存储位置，
+  不接受浏览器指定路径；MySQL 转到官方配置步骤 1/2，SQLite 创建配置后转到官方 `wp-admin/install.php`。
+  不在正常请求中加载。
 - `webroot/wp-content/mu-plugins/wplite/bootstrap.php`、`environment.php`：必要的启动与环境检查。
+- `webroot/wp-content/mu-plugins/wplite/migration.php`：仅当前 MySQL 单站点的可选迁移及请求隔离。
+  `migration-state*.php` 为运行时数据，不入库；成功后的 active 标记用于阻止旧配置缓存回连 MySQL。
 - `webroot/wp-content/mu-plugins/wplite/vendor/sqlite/`：内置上游驱动，保留许可证和版权声明。
 
-首页在缺少配置时进入官方 `setup-config.php`；MU 处理 SQLite 配置，再沿用官方
+首页在缺少配置时进入官方 `setup-config.php`；MU 提供数据库选择并处理 SQLite 配置，MySQL 配置步骤直接交回核心，再沿用官方
 `install.php` 创建站点和管理员。已配置时由 `wp-config.php` 加载 bootstrap 后进入
 官方 `wp-settings.php`，通过 `wp-content/db.php` 加载 SQLite 驱动。
 不要修改核心文件、恢复独立安装入口、复制官方管理员表单或自行调用 wp_install()。
@@ -31,7 +35,13 @@ drop-in 完成全新站点安装。优先交付能直接上传使用的 PHP 文�
 
 - 用户只能上传文件和使用浏览器，也必须能完成安装。不要要求 SSH、CLI、Python、
   Composer、构建步骤或安装时下载依赖。
-- 仅支持全新站点，不覆盖已有 `wp-config.php`、数据库 drop-in 或站点数据。
+- 全新安装不覆盖已有配置或数据。已有 MySQL 站点默认继续使用原库；不得覆盖其他插件的 drop-in。
+- 迁移仅限有 manage_options 权限的管理员，所有操作校验 nonce，确认阶段另校验一次性令牌。
+  复制及校验通过后仍须确认切换，不能自动启用副本。只读原库，不删除或修改 MySQL 表数据。
+- 迁移暂停本站 WordPress 请求并排空已纳入文件锁的请求；用户须等待部署前旧请求结束、
+  停止绕过 WordPress 直连数据库的写入。保留短租期、取消及异常解除暂停，不做后台迁移或自动重试。
+- 切换前重新校验源数据、副本和配置，原子插入私有 SQLite 配置加载语句，不重写其他设置；
+  不支持的结构、精度损失或非标准配置必须拒绝，不能静默略过或宣称万能迁移。
 - 安装入口按用户要求公开访问，直接展示设置表单，不要求安装口令、所有者凭据文件、
   HTTPS 或 Origin 匹配。保留防重复安装、拒绝覆盖已有站点和数据库访问保护。
 - 数据库优先放在公开目录之外。站内存储必须先确认服务器拒绝下载敏感文件；
@@ -46,7 +56,8 @@ drop-in 完成全新站点安装。优先交付能直接上传使用的 PHP 文�
 
 - WordPress 核心修改、核心源码入库、上游同步/rebase、自动 PR 或整站发行。
 - `tools/`、`checks/`、`tests/`、测试框架、兼容性矩阵或 CI 平台；此前测试目录的删除是用户决定。
-- 备份恢复、MySQL 迁移、多站点支持、自动更新器、后台管理功能或常驻 PHP/ePHPm。
+- 备份恢复、任意 SQL 文件导入、反向/增量迁移、多站点支持、自动更新器、
+  迁移确认之外的后台管理功能或常驻 PHP/ePHPm。
 
 保留 WordPress 核心、普通插件和主题的原有更新机制，不添加更新拦截。
 MU 插件和驱动当前需要手动部署更新，不宣称已具备普通插件自动更新能力。
