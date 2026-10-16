@@ -77,6 +77,8 @@ HTTP 会明文传输管理员密码，生产环境建议使用 HTTPS。
 验证确认数据库、日志及锁文件均返回 403/404 后才会继续，否则拒绝迁移。
 自定义数据库常量/加载方式、多站点、视图、触发器、真正的虚拟/存储生成列、外键表和无法无损复制的
 数据会被拒绝，不会静默跳过；MySQL 的 `DEFAULT_GENERATED` 表示表达式默认值，不作为生成列拒绝。
+旧版 MySQL/MariaDB 的 `NO_AUTO_CREATE_USER` 只影响账户授权，不涉及站点表数据，迁移时会忽略该已移除模式；
+日期、严格校验等其余会影响数据的 SQL 模式仍与源会话保持一致。
 这里是直接迁移当前数据库，不支持上传任意 `.sql` 文件。
 
 数据校验不等于所有插件运行兼容；生产站点请先在副本试迁移。当前没有自动回滚或反向同步，
@@ -98,3 +100,6 @@ HTTP 会明文传输管理员密码，生产环境建议使用 HTTPS。
 
 `webroot/` 中的 WPLite drop-in 和 MU 文件为交付内容，本地运行用的官方核心不随项目发行；
 `AGENTS.md` 为开发约束。内置驱动保留上游源码和许可证，不自行开发 SQL 翻译器。
+
+
+rm -f WPLite-0.2.0.zip && (cd webroot && zip -X -r ../WPLite-0.2.0.zip wp-content/db.php wp-content/mu-plugins/wplite.php wp-content/mu-plugins/wplite -x 'wp-content/mu-plugins/wplite/migration-state*.php' '*/.DS_Store')

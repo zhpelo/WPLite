@@ -231,8 +231,12 @@ final class Migration
             ['sqlite_journal_mode' => Environment::journalMode($version), 'sqlite_synchronous' => 'FULL']);
         // Match WordPress's MySQL session rules, including valid legacy zero dates.
         self::query($source, 'SELECT @@SESSION.sql_mode');
-        $mode = array_values((array) $source->last_result[0])[0];
-        $target->exec('SET SESSION sql_mode = ' . $target->quote($mode));
+        $mode = (string) array_values((array) $source->last_result[0])[0];
+        $modes = preg_split('/\s*,\s*/', trim($mode), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        // Removed in MySQL 8: this only controlled whether GRANT created users.
+        // WPLite migrates tables and rows, never accounts or GRANT statements.
+        $modes = array_values(array_filter($modes, static fn (string $item): bool => strcasecmp($item, 'NO_AUTO_CREATE_USER') !== 0));
+        $target->exec('SET SESSION sql_mode = ' . $target->quote(implode(',', $modes)));
         return $target;
     }
 
