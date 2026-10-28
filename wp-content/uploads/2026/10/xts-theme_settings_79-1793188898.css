@@ -1,0 +1,12 @@
+:is(.page, .search-no-results, .error404) :is(.wd-page-content, .whb-header) {
+	background-color: rgb(250,250,250);
+	background-image: none;
+}
+.woodmart-archive-shop:not(.single-product) :is(.wd-page-content, .whb-header) {
+	background-color: rgb(250,250,250);
+	background-image: none;
+}
+
+
+
+
