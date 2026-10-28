@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 150" role="img" aria-labelledby="title">
+  <title id="title">SHOPAGG主题</title>
+  <rect width="200" height="150" rx="6" fill="#f3f5f8"/>
+  <rect x="8" y="8" width="184" height="134" rx="5" fill="#fff"/>
+  <rect x="8" y="8" width="184" height="24" rx="5" fill="#17213a"/>
+  <circle cx="20" cy="20" r="4" fill="#eec65d"/>
+  <text x="30" y="24" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="10" font-weight="700">SHOPAGG</text>
+  <rect x="20" y="44" width="72" height="70" rx="6" fill="#f6e8c5"/>
+  <path d="M36 65h40v33a5 5 0 0 1-5 5H41a5 5 0 0 1-5-5V65Z" fill="#eec65d"/>
+  <path d="M43 67v-5c0-9 5-14 13-14s13 5 13 14v5" fill="none" stroke="#d07c3f" stroke-width="5" stroke-linecap="round"/>
+  <path d="M45 79c2 9 6 14 11 14s9-5 11-14" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="104" y="61" fill="#17213a" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif" font-size="12" font-weight="800">SHOPAGG主题</text>
+  <rect x="104" y="72" width="66" height="5" rx="2.5" fill="#d9dee7"/>
+  <rect x="104" y="83" width="54" height="5" rx="2.5" fill="#d9dee7"/>
+  <rect x="104" y="98" width="46" height="16" rx="8" fill="#d07c3f"/>
+  <text x="127" y="109" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="7" font-weight="700">PARENT</text>
+  <text x="100" y="134" text-anchor="middle" fill="#7b8497" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif" font-size="8">主主题</text>
+</svg>
