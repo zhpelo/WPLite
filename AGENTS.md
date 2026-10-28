@@ -3,7 +3,7 @@
 ## 目标与工作原则
 
 本项目的当前目标是快速上线：不修改 WordPress 核心，用精简 MU 插件和 SQLite
-drop-in 完成全新站点安装及管理员明确确认的 MySQL 单站点迁移。
+drop-in 完成全新站点安装及管理员明确启动的 MySQL 单站点迁移。
 优先交付能直接上传使用的 PHP 文件，不构建发行平台。
 
 - 只实现用户明确要求的功能；采用能完成任务的最小改动。
@@ -13,18 +13,18 @@ drop-in 完成全新站点安装及管理员明确确认的 MySQL 单站点迁�
 
 ## 当前目录与加载方式
 
-- `webroot/`：本地 WordPress 运行目录；WPLite 交付仅包含下列 drop-in/MU 文件，
+- 项目根目录：本地 WordPress 运行目录；WPLite 交付仅包含下列 drop-in/MU 文件，
   其中用于本地运行的官方核心不属于本项目维护或发行内容。
-- `webroot/wp-content/db.php`：随包上传的数据库 drop-in；`WP_SETUP_CONFIG` 阶段直接返回，
+- `wp-content/db.php`：随包上传的数据库 drop-in；`WP_SETUP_CONFIG` 阶段直接返回，
   让官方未连接的 wpdb 占位对象继续引导至 MU 插件，正常请求再初始化 SQLite。
-- `webroot/wp-content/mu-plugins/wplite.php`：MU 入口，只在 `WP_SETUP_CONFIG` 阶段接管配置。
-- `webroot/wp-content/mu-plugins/wplite/setup.php`：数据库选择页，默认 SQLite，自动选择安全存储位置，
+- `wp-content/mu-plugins/wplite.php`：MU 入口，只在 `WP_SETUP_CONFIG` 阶段接管配置。
+- `wp-content/mu-plugins/wplite/setup.php`：数据库选择页，默认 SQLite，自动在 `wp-content` 下创建受保护数据目录，
   不接受浏览器指定路径；MySQL 转到官方配置步骤 1/2，SQLite 创建配置后转到官方 `wp-admin/install.php`。
   不在正常请求中加载。
-- `webroot/wp-content/mu-plugins/wplite/bootstrap.php`、`environment.php`：必要的启动与环境检查。
-- `webroot/wp-content/mu-plugins/wplite/migration.php`：仅当前 MySQL 单站点的可选迁移及请求隔离。
+- `wp-content/mu-plugins/wplite/bootstrap.php`、`environment.php`：必要的启动与环境检查。
+- `wp-content/mu-plugins/wplite/migration.php`：仅当前 MySQL 单站点的可选迁移及请求隔离。
   `migration-state*.php` 为运行时数据，不入库；成功后的 active 标记用于阻止旧配置缓存回连 MySQL。
-- `webroot/wp-content/mu-plugins/wplite/vendor/sqlite/`：内置上游驱动，保留许可证和版权声明。
+- `wp-content/mu-plugins/wplite/vendor/sqlite/`：内置上游驱动，保留许可证和版权声明。
 
 首页在缺少配置时进入官方 `setup-config.php`；MU 提供数据库选择并处理 SQLite 配置，MySQL 配置步骤直接交回核心，再沿用官方
 `install.php` 创建站点和管理员。已配置时由 `wp-config.php` 加载 bootstrap 后进入
@@ -36,18 +36,28 @@ drop-in 完成全新站点安装及管理员明确确认的 MySQL 单站点迁�
 - 用户只能上传文件和使用浏览器，也必须能完成安装。不要要求 SSH、CLI、Python、
   Composer、构建步骤或安装时下载依赖。
 - 全新安装不覆盖已有配置或数据。已有 MySQL 站点默认继续使用原库；不得覆盖其他插件的 drop-in。
-- 迁移仅限有 manage_options 权限的管理员，所有操作校验 nonce，确认阶段另校验一次性令牌。
-  复制及校验通过后仍须确认切换，不能自动启用副本。只读原库，不删除或修改 MySQL 表数据。
+- 迁移仅限有 manage_options 权限的管理员，所有操作校验 nonce 和迁移令牌。
+  用户已要求取消二次确认：管理员开始后，复制及副本校验通过即自动切换。
+  只读原库，不删除或修改 MySQL 表数据。
 - 迁移暂停本站 WordPress 请求并排空已纳入文件锁的请求；用户须等待部署前旧请求结束、
-  停止绕过 WordPress 直连数据库的写入。保留短租期、取消及异常解除暂停，不做后台迁移或自动重试。
-- 切换前重新校验源数据、副本和配置，原子插入私有 SQLite 配置加载语句，不重写其他设置；
+  停止绕过 WordPress 直连数据库的写入。由浏览器连续提交短请求，分批复制和复核，
+  单次请求在共享的行数和时间预算内连续处理多张表，不得为每张表重置请求预算。
+  每批验证管理员、nonce、迁移令牌和请求序号，重复提交不得重复写入。
+  表锁仅在单批请求内持有；进度请求的原 WordPress MySQL 连接必须只读。
+  保留短租期、取消及异常解除暂停，不做后台迁移或失败自动重试；过期副本不得续传或切换。
+- 复制时记录源数据哈希，分批校验副本及完整性，切换前检查源表结构、清单和配置，
+  不再重复全量扫描源库或副本；原子插入私有 SQLite 配置加载语句，不重写其他设置；
   不支持的结构、精度损失或非标准配置必须拒绝，不能静默略过或宣称万能迁移。
+- 内容跳过仅限明确的 `actionscheduler_logs`、`woocommerce_log`、`woocommerce_sessions`
+  表（使用实际表前缀，保留结构）及 options 中的 `_transient_`、`_site_transient_` 缓存。
+  购物车会话内容省略是用户明确选择；其他表、订单、库存及任务数据默认完整迁移，不按名称模糊匹配。
+  复制时的源哈希作为副本校验基线；自动切换依赖迁移全程暂停本站和外部数据库写入。
 - 安装入口按用户要求公开访问，直接展示设置表单，不要求安装口令、所有者凭据文件、
   HTTPS 或 Origin 匹配。保留防重复安装、拒绝覆盖已有站点和数据库访问保护。
-- 数据库优先放在公开目录之外。站内存储必须先确认服务器拒绝下载敏感文件；
+- 新安装和 MySQL 迁移统一使用 `wp-content/wplite-data-随机字符/site.sqlite`，不尝试上级目录、
+  同级 private 或 HOME。站内存储必须先确认服务器拒绝下载敏感文件；
   不以随机路径、PHP 检查或未经验证的 `.htaccess` 代替服务器访问控制。
-- MySQL 迁移在外部父目录不可写时，允许自动回退到默认 `wp-content` 下的受保护目录，
-  但必须复用安装阶段的真实 HTTP 下载阻断验证，并把 deny 规则哈希写入切换配置。
+- MySQL 迁移必须复用安装阶段的真实 HTTP 下载阻断验证，并把 deny 规则哈希写入切换配置。
 - 安装失败明确报错，不静默重建丢失的数据库，不自动删除用户数据或开发恢复流程。
 - 不自行编写 SQL 翻译器，不直接修改上游 vendor 源码。仅在明确要求升级依赖时
   核对来源、版本和归档校验值，保留原始文件及许可证。

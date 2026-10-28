@@ -1,13 +1,4 @@
 .cache/
 dist/
-/wplite-data-*/
-/webroot/wp-content/mu-plugins/wplite/migration-state*.php
-webroot/*
-!webroot/wp-content/
-webroot/wp-content/*
-!webroot/wp-content/mu-plugins/
-webroot/wp-content/mu-plugins/*
-!/webroot/wp-content/mu-plugins/wplite.php
-!/webroot/wp-content/mu-plugins/wplite/
-!/webroot/wp-content/db.php
 *.zip
+.DS_Store
