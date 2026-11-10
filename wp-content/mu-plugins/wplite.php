@@ -3,7 +3,7 @@
  * Plugin Name: WPLite
  * Plugin URI: https://github.com/zhpelo/WPLite
  * Description: Minimal SQLite integration. WordPress owns core updates.
- * Version: 0.2.0-dev
+ * Version: 0.2.0
  * Requires PHP: 8.3
  * License: GPL-2.0-or-later
  */
@@ -11,6 +11,18 @@ declare(strict_types=1);
 
 if (!defined('ABSPATH')) {
     exit;
+}
+if (!defined('WPLITE_MU_DISPATCHED') && is_file(__DIR__ . '/wplite-current.php')) {
+    $wpliteVersion = defined('WPLITE_REQUEST_VERSION') ? WPLITE_REQUEST_VERSION
+        : trim(substr((string) file_get_contents(__DIR__ . '/wplite-current.php'), strlen("<?php exit; __halt_compiler();\n")));
+    if (!preg_match('/^v[0-9]+\.[0-9]+\.[0-9]+$/D', $wpliteVersion)
+        || !is_file(__DIR__ . '/wplite-versions/' . $wpliteVersion . '/wp-content/mu-plugins/wplite.php')) {
+        http_response_code(503); exit('WPLite update files are incomplete.');
+    }
+    if (!defined('WPLITE_REQUEST_VERSION')) { define('WPLITE_REQUEST_VERSION', $wpliteVersion); }
+    define('WPLITE_MU_DISPATCHED', true);
+    require __DIR__ . '/wplite-versions/' . $wpliteVersion . '/wp-content/mu-plugins/wplite.php';
+    return;
 }
 
 if (defined('WP_SETUP_CONFIG') && WP_SETUP_CONFIG) {
@@ -28,4 +40,8 @@ if ((!defined('DB_ENGINE') || DB_ENGINE !== 'sqlite') && !is_multisite()) {
     require_once __DIR__ . '/wplite/migration.php';
     add_action('admin_notices', [\WPLite\Migration::class, 'notice']);
     add_action('admin_post_wplite_migration', [\WPLite\Migration::class, 'handle']);
+}
+if (is_admin()) {
+    require_once __DIR__ . '/wplite/updater.php';
+    \WPLite\Updater::register();
 }

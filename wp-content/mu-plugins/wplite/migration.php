@@ -6,7 +6,7 @@ namespace WPLite;
 /** Browser-driven MySQL migration. No background jobs or automatic retry. */
 final class Migration
 {
-    private const STATE = __DIR__ . '/migration-state.php';
+    private const STATE = WP_CONTENT_DIR . '/mu-plugins/wplite/migration-state.php';
     private const STATE_HEADER = "<?php http_response_code(404); exit; __halt_compiler();\n";
     private static $gate = null;
     private static ?\mysqli $readOnlyConnection = null;
@@ -43,7 +43,7 @@ final class Migration
 
     private static function save(array $state): void
     {
-        $file = __DIR__ . '/migration-state-' . bin2hex(random_bytes(8)) . '.php';
+        $file = WP_CONTENT_DIR . '/mu-plugins/wplite/migration-state-' . bin2hex(random_bytes(8)) . '.php';
         $code = self::STATE_HEADER . json_encode($state, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         $handle = @fopen($file, 'x');
         if (!$handle) { throw new \RuntimeException('无法写入迁移状态。'); }

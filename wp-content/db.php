@@ -6,10 +6,22 @@ if (!defined('ABSPATH')) {
     http_response_code(404);
     exit;
 }
+// Stable drop-in: a version is selected by one atomic, guarded pointer file.
+if (!defined('WPLITE_DB_DISPATCHED') && is_file(__DIR__ . '/mu-plugins/wplite-current.php')) {
+    $wpliteVersion = trim(substr((string) file_get_contents(__DIR__ . '/mu-plugins/wplite-current.php'), strlen("<?php exit; __halt_compiler();\n")));
+    if (!preg_match('/^v[0-9]+\.[0-9]+\.[0-9]+$/D', $wpliteVersion)
+        || !is_file(__DIR__ . '/mu-plugins/wplite-versions/' . $wpliteVersion . '/wp-content/db.php')) {
+        http_response_code(503); exit('WPLite update files are incomplete.');
+    }
+    if (!defined('WPLITE_REQUEST_VERSION')) { define('WPLITE_REQUEST_VERSION', $wpliteVersion); }
+    define('WPLITE_DB_DISPATCHED', true);
+    require __DIR__ . '/mu-plugins/wplite-versions/' . $wpliteVersion . '/wp-content/db.php';
+    return;
+}
 // The native configuration page must reach MU loading before SQLite is set up.
 // WordPress supplies its unconnected wpdb placeholder during this phase.
 if (defined('WP_SETUP_CONFIG') && WP_SETUP_CONFIG) { return; }
-if (!defined('DB_ENGINE') || DB_ENGINE !== 'sqlite' || is_file(__DIR__ . '/mu-plugins/wplite/migration-state.php')) {
+if (!defined('DB_ENGINE') || DB_ENGINE !== 'sqlite' || is_file(WP_CONTENT_DIR . '/mu-plugins/wplite/migration-state.php')) {
     require_once __DIR__ . '/mu-plugins/wplite/migration.php';
     \WPLite\Migration::guard();
 }

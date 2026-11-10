@@ -103,18 +103,24 @@ MySQL 表读锁仅在各批请求中持有，不能跨 HTTP 请求保留。
 ## 更新与兼容性
 
 - WordPress 核心、普通插件和主题沿用各自原有更新机制，WPLite 不接管更新。
-- WPLite MU 插件和内置 SQLite 驱动需要手动部署更新，不提供自动更新器。
+- WPLite 0.2.0 起，SQLite 站点的管理员可在后台看到新版提示并点击升级。
+  升级来源为 `zhpelo/WPLite` 的最新稳定 GitHub Release；不启用无人值守更新。
+  Release 须同时提供 `WPLite-v版本.zip` 与同名 `.zip.sha256` 文件。ZIP 仅包含
+  `wp-content/db.php`、`wp-content/mu-plugins/wplite.php` 和 `wp-content/mu-plugins/wplite/`，
+  不含数据库、配置和 `migration-state*.php`。GitHub 的“Download ZIP”不适用。
+  SHA-256 文件可只含 64 位十六进制摘要，或摘要加 ZIP 文件名。
+- 升级前会校验包摘要、版本、文件清单与运行环境。新代码先放入独立版本目录，
+  最后原子切换版本指针；旧代码保留。早期加载入口发生变化的版本需要手动部署。
+  在线升级需要 PHP ZipArchive 扩展，以及 `wp-content/mu-plugins` 的写入权限。
+  首次使用前请先在测试站点确认该 Release 的升级与页面访问。
 - 遵循 WordPress 插件接口并不等于所有插件和主题都兼容 SQLite。依赖 MySQL
   专属语法、直接连接 MySQL 或写入密集的插件，需要单独确认兼容性与负载表现。
 - 当前面向单站点、本地磁盘，不支持多站点或网络共享数据库文件。
 
 ## 项目范围
 
-当前优先快速上线，只维护必要的安装、管理员确认的 MySQL 迁移与 SQLite 运行逻辑。不维护 WordPress fork、
-核心同步/rebase、整站发行、tools、checks、测试平台、备份恢复或 ePHPm。
+当前优先快速上线，只维护必要的安装、管理员确认的 MySQL 迁移、SQLite 运行和管理员手动触发的 WPLite 升级。
+不维护 WordPress fork、核心同步/rebase、整站发行、tools、checks、测试平台、备份恢复或 ePHPm。
 
 `wp-content/` 中的 WPLite drop-in 和 MU 文件为交付内容，本地运行用的官方核心不随项目发行；
 `AGENTS.md` 为开发约束。内置驱动保留上游源码和许可证，不自行开发 SQL 翻译器。
-
-
-rm -f WPLite-0.2.0.zip && (cd webroot && zip -X -r ../WPLite-0.2.0.zip wp-content/db.php wp-content/mu-plugins/wplite.php wp-content/mu-plugins/wplite -x 'wp-content/mu-plugins/wplite/migration-state*.php' '*/.DS_Store')

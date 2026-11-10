@@ -7,6 +7,18 @@ if (!defined('ABSPATH')) {
     http_response_code(404);
     exit;
 }
+if (!defined('WPLITE_BOOTSTRAP_DISPATCHED') && is_file(dirname(__DIR__) . '/wplite-current.php')) {
+    $wpliteVersion = defined('WPLITE_REQUEST_VERSION') ? WPLITE_REQUEST_VERSION
+        : trim(substr((string) file_get_contents(dirname(__DIR__) . '/wplite-current.php'), strlen("<?php exit; __halt_compiler();\n")));
+    if (!preg_match('/^v[0-9]+\.[0-9]+\.[0-9]+$/D', $wpliteVersion)
+        || !is_file(dirname(__DIR__) . '/wplite-versions/' . $wpliteVersion . '/wp-content/mu-plugins/wplite/bootstrap.php')) {
+        http_response_code(503); exit('WPLite update files are incomplete.');
+    }
+    if (!defined('WPLITE_REQUEST_VERSION')) { define('WPLITE_REQUEST_VERSION', $wpliteVersion); }
+    define('WPLITE_BOOTSTRAP_DISPATCHED', true);
+    require dirname(__DIR__) . '/wplite-versions/' . $wpliteVersion . '/wp-content/mu-plugins/wplite/bootstrap.php';
+    return;
+}
 require_once __DIR__ . '/environment.php';
 
 try {
