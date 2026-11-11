@@ -1,6 +1,7 @@
 .cache/
 dist/
 *.zip
+!docs/updates/*.zip
 .DS_Store
 wp-content/upgrade*
 wp-content/uploads/wc-logs/*

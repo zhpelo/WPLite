@@ -72,7 +72,7 @@ drop-in 完成全新站点安装及管理员明确启动的 MySQL 单站点迁�
   迁移确认之外的后台管理功能或常驻 PHP/ePHPm。
 
 保留 WordPress 核心、普通插件和主题的原有更新机制，不添加更新拦截。
-WPLite 的 MU 插件和驱动通过专用 GitHub Release 包由管理员点击升级，
+WPLite 的 MU 插件和驱动通过本仓库 GitHub Pages 的独立更新目录由管理员点击升级，
 不接入 WordPress 普通插件自动更新，也不覆盖数据库或站点配置。
 
 ## 修改与验证

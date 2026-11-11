@@ -56,7 +56,8 @@ HTTP 会明文传输管理员密码，生产环境建议使用 HTTPS。
 
 1. 上传相同的 WPLite drop-in 和 MU 文件；已有其他插件的 `db.php` 时不要覆盖。
    WPLite 在管理员开始迁移前继续使用原 MySQL，不会因为上传文件自动迁移。
-2. 管理员登录后台后会看到迁移提示。部署后先等待旧请求结束，并停止其他程序直接
+2. 管理员登录后台后可通过迁移提示，或「工具 → 迁移到 SQLite」打开操作页。
+   部署后先等待旧请求结束，并停止其他程序直接
    写入本站表；确认接受短暂停站及校验后自动切换，再点击“开始迁移，完成后自动切换”。
    `actionscheduler_logs`、`woocommerce_log`、`woocommerce_sessions`（均使用实际站点表前缀）
    只迁移表结构，不复制内容；访客尚未结账的购物车会清空。`options` 表内的
@@ -104,11 +105,11 @@ MySQL 表读锁仅在各批请求中持有，不能跨 HTTP 请求保留。
 
 - WordPress 核心、普通插件和主题沿用各自原有更新机制，WPLite 不接管更新。
 - WPLite 0.2.0 起，SQLite 站点的管理员可在后台看到新版提示并点击升级。
-  升级来源为 `zhpelo/WPLite` 的最新稳定 GitHub Release；不启用无人值守更新。
-  Release 须同时提供 `WPLite-v版本.zip` 与同名 `.zip.sha256` 文件。ZIP 仅包含
+  核心更新从本仓库 GitHub Pages 的 `updates/latest.json` 读取版本、ZIP 地址和 SHA-256；
+  GitHub Releases 只用于整站包，不启用无人值守更新。核心 ZIP 仅包含
   `wp-content/db.php`、`wp-content/mu-plugins/wplite.php` 和 `wp-content/mu-plugins/wplite/`，
   不含数据库、配置和 `migration-state*.php`。GitHub 的“Download ZIP”不适用。
-  SHA-256 文件可只含 64 位十六进制摘要，或摘要加 ZIP 文件名。
+  Pages 发布前不会出现新版提示；已有站点需要先手动上传这版 WPLite 文件，才能切换到新更新源。
 - 升级前会校验包摘要、版本、文件清单与运行环境。新代码先放入独立版本目录，
   最后原子切换版本指针；旧代码保留。早期加载入口发生变化的版本需要手动部署。
   在线升级需要 PHP ZipArchive 扩展，以及 `wp-content/mu-plugins` 的写入权限。

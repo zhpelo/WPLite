@@ -39,6 +39,7 @@ if (defined('WP_SETUP_CONFIG') && WP_SETUP_CONFIG) {
 if ((!defined('DB_ENGINE') || DB_ENGINE !== 'sqlite') && !is_multisite()) {
     require_once __DIR__ . '/wplite/migration.php';
     add_action('admin_notices', [\WPLite\Migration::class, 'notice']);
+    add_action('admin_menu', [\WPLite\Migration::class, 'menu']);
     add_action('admin_post_wplite_migration', [\WPLite\Migration::class, 'handle']);
 }
 if (is_admin()) {

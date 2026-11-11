@@ -144,9 +144,10 @@ final class Migration
         throw new \RuntimeException('仍有请求在运行，尚未开始迁移。请稍后重试。');
     }
 
-    public static function notice(): void
+    public static function notice(bool $onPage = false): void
     {
         if (!current_user_can('manage_options')) { return; }
+        if (!$onPage && ($_GET['page'] ?? '') === 'wplite-migrate') { return; }
         echo '<div class="notice notice-info is-dismissible"><p>WPLite：当前站点使用 MySQL，是否迁移到 SQLite？开始后将连续完成复制、校验和自动切换，原 MySQL 数据库会保留。</p>';
         echo '<p>任务执行日志、WooCommerce 运行日志、购物车会话仅迁移表结构；WordPress 临时缓存不迁移。访客尚未结账的购物车会被清空。</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
@@ -154,6 +155,19 @@ final class Migration
         echo '<input type="hidden" name="action" value="wplite_migration"><input type="hidden" name="operation" value="start">';
         echo '<p><label><input type="checkbox" name="accept_pause" value="1" required> 我接受短暂停站及校验后自动切换，已等待部署前的旧请求结束，并停止其他程序直接写入数据库。</label></p>';
         echo '<p><button class="button button-primary">开始迁移，完成后自动切换</button> 暂不迁移可关闭此提示。</p></form></div>';
+    }
+
+    public static function menu(): void
+    {
+        add_management_page('WPLite 迁移到 SQLite', '迁移到 SQLite', 'manage_options', 'wplite-migrate', [self::class, 'migrationPage']);
+    }
+
+    public static function migrationPage(): void
+    {
+        if (!current_user_can('manage_options')) { wp_die('无权访问。', '', ['response' => 403]); }
+        echo '<div class="wrap"><h1>WPLite 迁移到 SQLite</h1>';
+        self::notice(true);
+        echo '</div>';
     }
 
     private static function tick(): void

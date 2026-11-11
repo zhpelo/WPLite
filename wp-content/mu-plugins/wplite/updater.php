@@ -5,7 +5,7 @@ namespace WPLite;
 
 final class Updater
 {
-    private const API = 'https://api.github.com/repos/zhpelo/WPLite/releases/latest';
+    private const UPDATE_ROOT = 'https://zhpelo.github.io/WPLite/updates/';
     private const POINTER_HEADER = "<?php exit; __halt_compiler();\n";
 
     public static function register(): void
@@ -24,29 +24,22 @@ final class Updater
     {
         $cached = get_site_transient('wplite_release');
         if (!$force && is_array($cached)) { return $cached; }
-        $response = wp_remote_get(self::API, ['timeout' => 8, 'headers' => ['Accept' => 'application/vnd.github+json']]);
+        $response = wp_safe_remote_get(self::UPDATE_ROOT . 'latest.json', ['timeout' => 8, 'limit_response_size' => 4096]);
         if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
             set_site_transient('wplite_release', [], HOUR_IN_SECONDS);
             return [];
         }
         $data = json_decode(wp_remote_retrieve_body($response), true);
-        $tag = $data['tag_name'] ?? '';
-        if (!is_array($data) || !empty($data['prerelease']) || !empty($data['draft'])
-            || !is_string($tag) || !preg_match('/^v[0-9]+\.[0-9]+\.[0-9]+$/D', $tag)) { return []; }
-        $assets = [];
-        foreach ($data['assets'] ?? [] as $asset) {
-            if (!is_array($asset) || !isset($asset['name'], $asset['browser_download_url'])) { continue; }
-            $url = $asset['browser_download_url'];
-            if (is_string($url) && str_starts_with($url, 'https://github.com/zhpelo/WPLite/releases/download/')) {
-                $assets[$asset['name']] = $url;
-            }
-        }
-        $zip = 'WPLite-' . $tag . '.zip';
-        if (!isset($assets[$zip], $assets[$zip . '.sha256'])) {
+        $version = is_array($data) ? ($data['version'] ?? null) : null;
+        $url = is_array($data) ? ($data['url'] ?? null) : null;
+        $digest = is_array($data) ? ($data['sha256'] ?? null) : null;
+        if (!is_string($version) || !preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/D', $version)
+            || !is_string($url) || $url !== self::UPDATE_ROOT . 'WPLite-v' . $version . '.zip'
+            || !is_string($digest) || !preg_match('/^[a-f0-9]{64}$/iD', $digest)) {
             set_site_transient('wplite_release', [], HOUR_IN_SECONDS);
             return [];
         }
-        $result = ['tag' => $tag, 'zip' => $assets[$zip], 'hash' => $assets[$zip . '.sha256']];
+        $result = ['tag' => 'v' . $version, 'zip' => $url, 'sha256' => strtolower($digest)];
         set_site_transient('wplite_release', $result, 12 * HOUR_IN_SECONDS);
         return $result;
     }
@@ -72,7 +65,7 @@ final class Updater
         if (!$file) { throw new \RuntimeException('无法建立临时文件。'); }
         $response = wp_safe_remote_get($url, ['timeout' => 30, 'stream' => true, 'filename' => $file]);
         if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-            @unlink($file); throw new \RuntimeException('无法下载 GitHub Release 文件。');
+            @unlink($file); throw new \RuntimeException('无法下载 WPLite 更新包。');
         }
         if (filesize($file) > 30 * 1024 * 1024) {
             @unlink($file); throw new \RuntimeException('升级文件过大。');
@@ -179,10 +172,7 @@ final class Updater
                 throw new \RuntimeException('没有可用的稳定版。');
             }
             $files[] = $zip = self::download($release['zip']);
-            $files[] = $hashFile = self::download($release['hash']);
-            $expected = trim((string) file_get_contents($hashFile));
-            if (!preg_match('/^([a-f0-9]{64})(?:\s+\*?WPLite-' . preg_quote($release['tag'], '/') . '\.zip)?$/iD', $expected, $match)
-                || !hash_equals(strtolower($match[1]), hash_file('sha256', $zip))) {
+            if (!hash_equals($release['sha256'], hash_file('sha256', $zip))) {
                 throw new \RuntimeException('升级包 SHA-256 校验失败。');
             }
             $base = WP_CONTENT_DIR . '/mu-plugins/wplite-versions';
