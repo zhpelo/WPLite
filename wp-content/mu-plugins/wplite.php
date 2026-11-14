@@ -3,7 +3,7 @@
  * Plugin Name: WPLite
  * Plugin URI: https://github.com/zhpelo/WPLite
  * Description: Minimal SQLite integration. WordPress owns core updates.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Requires PHP: 8.3
  * License: GPL-2.0-or-later
  */
