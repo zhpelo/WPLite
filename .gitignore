@@ -6,3 +6,4 @@ dist/
 wp-content/upgrade*
 wp-content/uploads/wc-logs/*
 .maintenance
+WPLite-v0.2.0.zip.sha256

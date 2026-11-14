@@ -414,26 +414,45 @@ final class Migration
     private static function configuration(): array
     {
         $path = is_file(ABSPATH . 'wp-config.php') ? ABSPATH . 'wp-config.php' : dirname(rtrim(ABSPATH, '/')) . '/wp-config.php';
-        if (is_link($path) || !is_file($path) || !is_writable($path) || !is_writable(dirname($path))) { throw new \RuntimeException('现有 wp-config.php 必须是可写的普通文件。'); }
+        if (is_link($path) || !is_file($path) || !is_readable($path)
+            || ($path === ABSPATH . 'wp-config.php' && !is_writable($path))) {
+            throw new \RuntimeException('现有 wp-config.php 必须是可读取的普通文件；根目录配置还须可写。');
+        }
         $code = (string) file_get_contents($path);
-        $offset = 0; $depth = 0; $found = [];
+        $depth = 0; $found = []; $defined = [];
         $tokens = token_get_all($code, TOKEN_PARSE);
         foreach ($tokens as $index => $token) {
             $text = is_array($token) ? $token[1] : $token;
-            if (is_array($token) && in_array($token[0], [T_REQUIRE, T_REQUIRE_ONCE], true) && $depth === 0) {
+            if (is_array($token) && $token[0] === T_STRING && strcasecmp($text, 'define') === 0) {
+                $j = $index + 1;
+                while (isset($tokens[$j]) && is_array($tokens[$j]) && in_array($tokens[$j][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) { ++$j; }
+                if (($tokens[$j] ?? null) === '(') {
+                    ++$j;
+                    while (isset($tokens[$j]) && is_array($tokens[$j]) && in_array($tokens[$j][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) { ++$j; }
+                    $name = $tokens[$j] ?? null;
+                    if (!is_array($name) || $name[0] !== T_CONSTANT_ENCAPSED_STRING
+                        || !preg_match('/^[\x27\x22]([A-Z][A-Z0-9_]*)[\x27\x22]$/D', $name[1], $match)) {
+                        throw new \RuntimeException('wp-config.php 包含动态常量，不能安全生成新配置。');
+                    }
+                    $defined[$match[1]] = true;
+                }
+            }
+            if (is_array($token) && in_array($token[0], [T_REQUIRE, T_REQUIRE_ONCE, T_INCLUDE, T_INCLUDE_ONCE], true)) {
                 $statement = '';
                 for ($j = $index; $j < count($tokens); ++$j) {
                     $part = $tokens[$j];
                     if (!is_array($part) || !in_array($part[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) { $statement .= is_array($part) ? $part[1] : $part; }
                     if ($part === ';') { break; }
                 }
-                if (preg_match('/^require(?:_once)?\(?ABSPATH\.([\'"])wp-settings\.php\1\)?;$/D', $statement)) { $found[] = $offset; }
+                if ($depth !== 0 || !preg_match('/^require(?:_once)?\(?ABSPATH\.([\'"])wp-settings\.php\1\)?;$/D', $statement)) {
+                    throw new \RuntimeException('原配置包含额外文件加载语句，不能安全生成新配置。');
+                }
+                $found[] = true;
             }
             if ($token === '{') { ++$depth; } elseif ($token === '}') { --$depth; }
-            $offset += strlen($text);
         }
         if (count($found) !== 1) { throw new \RuntimeException('仅支持具有标准 wp-settings.php 加载语句的配置；不会猜测或重写自定义配置。'); }
-        return ['path' => $path, 'sha256' => hash('sha256', $code), 'offset' => $found[0], 'code' => $code];
+        return ['path' => $path, 'sha256' => hash('sha256', $code), 'code' => $code, 'defined' => array_keys($defined)];
     }
 
     private static function createTarget(): array
@@ -452,7 +471,7 @@ final class Migration
         }
         $result = ['database' => $directory . '/site.sqlite', 'public' => $public];
         require_once __DIR__ . '/setup.php';
-        Setup::protectedStorage($root, $directory, rtrim(site_url('', is_ssl() ? 'https' : 'http'), '/'));
+        Setup::createDenyRule($directory);
         $result['storage_deny_hash'] = hash('sha256', Setup::DENY);
         $path = $directory . '/site.sqlite';
         $old = umask(0077);
@@ -539,23 +558,47 @@ final class Migration
     {
         $config = self::checkConfiguration($state);
         require_once __DIR__ . '/setup.php';
-        $helper = dirname($state['database']) . '/wordpress-sqlite.php';
-        $code = "<?php\n// WPLite: the original MySQL database is retained.\n";
-        $constants = ['DB_ENGINE' => 'sqlite', 'DB_PATH' => $state['database'], 'WPLITE_PUBLIC_ROOT' => $state['public']];
-        if (isset($state['storage_deny_hash'])) { $constants['WPLITE_STORAGE_DENY_HASH'] = $state['storage_deny_hash']; }
-        foreach ($constants as $name => $value) { $code .= 'define(' . var_export($name, true) . ', ' . var_export($value, true) . ");\n"; }
-        $code .= 'require_once ' . var_export(__DIR__ . '/bootstrap.php', true) . ";\n";
-        Setup::fresh($helper, $code);
-        $updated = substr_replace($config['code'], 'require_once ' . var_export($helper, true) . ";\n", $config['offset'], 0);
+        global $table_prefix;
+        if (!is_string($table_prefix)) { throw new \RuntimeException('无法保留原站点表前缀，未切换。'); }
+        $constants = ['DB_ENGINE' => 'sqlite', 'DB_PATH' => $state['database'],
+            'DB_NAME' => 'wplite', 'DB_USER' => '', 'DB_PASSWORD' => '', 'DB_HOST' => '',
+            'DB_CHARSET' => defined('DB_CHARSET') ? DB_CHARSET : 'utf8mb4',
+            'DB_COLLATE' => defined('DB_COLLATE') ? DB_COLLATE : '',
+            'WPLITE_PUBLIC_ROOT' => $state['public'],
+            'WPLITE_STORAGE_DENY_HASH' => $state['storage_deny_hash']];
+        foreach ($config['defined'] as $name) {
+            if ($name === 'ABSPATH' || str_starts_with($name, 'DB_')) { continue; }
+            if (str_starts_with($name, 'WPLITE_') || !defined($name)) {
+                throw new \RuntimeException('原配置包含不支持的常量：' . $name);
+            }
+            $value = constant($name);
+            if (!is_scalar($value) && $value !== null) { throw new \RuntimeException('原配置包含非标量常量：' . $name); }
+            $constants[$name] = $value;
+        }
+        foreach (['AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY', 'AUTH_SALT', 'SECURE_AUTH_SALT', 'LOGGED_IN_SALT', 'NONCE_SALT'] as $name) {
+            if (!isset($constants[$name]) || !is_string($constants[$name])) {
+                throw new \RuntimeException('原配置缺少站点密钥：' . $name);
+            }
+        }
+        $publishPath = ABSPATH . 'wp-config.php';
+        $replacingRoot = $config['path'] === $publishPath;
+        if (!is_writable(ABSPATH) || (!$replacingRoot && (file_exists($publishPath) || is_link($publishPath)))) {
+            throw new \RuntimeException('网站根目录无法安全创建 wp-config.php，未切换。');
+        }
+        $updated = Setup::configSource($constants, $table_prefix);
         token_get_all($updated, TOKEN_PARSE);
-        $temporary = dirname($config['path']) . '/.wplite-config-' . bin2hex(random_bytes(8)) . '.php';
+        $backup = dirname($state['database']) . '/wp-config.mysql.bak';
+        Setup::fresh($backup, $config['code']);
+        $temporary = ABSPATH . '.wplite-config-' . bin2hex(random_bytes(8)) . '.php';
         Setup::fresh($temporary, $updated, fileperms($config['path']) & 0777);
         self::tick();
-        if (!hash_equals($state['config_hash'], hash_file('sha256', $config['path'])) || !rename($temporary, $config['path'])) {
+        if (!hash_equals($state['config_hash'], hash_file('sha256', $config['path']))
+            || !($replacingRoot ? rename($temporary, $publishPath) : link($temporary, $publishPath))) {
             throw new \RuntimeException('配置发布失败，未切换。');
         }
+        if (!$replacingRoot) { @unlink($temporary); }
         $committed = true;
-        if (function_exists('opcache_invalidate')) { opcache_invalidate($config['path'], true); }
+        if (function_exists('opcache_invalidate')) { opcache_invalidate($publishPath, true); }
     }
 
     public static function handle(): void
