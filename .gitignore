@@ -1,5 +1,4 @@
 .cache/
-dist/
 *.zip
 !docs/updates/*.zip
 .DS_Store

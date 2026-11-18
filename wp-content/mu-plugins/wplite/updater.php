@@ -101,6 +101,7 @@ final class Updater
         $root = $destination . '/wp-content';
         foreach (['db.php', 'mu-plugins/wplite.php', 'mu-plugins/wplite/bootstrap.php',
             'mu-plugins/wplite/environment.php', 'mu-plugins/wplite/migration.php',
+            'mu-plugins/wplite/conversion-core.php',
             'mu-plugins/wplite/setup.php', 'mu-plugins/wplite/updater.php',
             'mu-plugins/wplite/vendor/sqlite/wp-includes/sqlite/db.php',
             'mu-plugins/wplite/vendor/sqlite/LICENSE'] as $path) {
